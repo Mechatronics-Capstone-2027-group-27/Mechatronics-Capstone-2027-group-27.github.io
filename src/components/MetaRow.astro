@@ -1,0 +1,46 @@
+---
+// date · author · collaborators · hours. Every field is optional so cards and
+// detail pages can choose which ones to show; empty collaborators render nothing.
+import Icon from './Icon.astro';
+import { memberName } from '../config/site';
+import { formatDate, formatHours, isoDate, joinNames } from '../lib/format';
+
+interface Props {
+  date?: Date;
+  author?: string;
+  collaborators?: readonly string[];
+  hours?: number;
+  hoursLabel?: string;
+  class?: string;
+}
+const { date, author, collaborators = [], hours, hoursLabel = 'Time committed', class: cls } = Astro.props;
+const collabNames = collaborators.map(memberName);
+---
+<ul class:list={['meta', cls]} role="list">
+  {date && (
+    <li class="meta__item meta__date">
+      <Icon name="calendar" size={14} />
+      <span class="sr-only">Date:</span>
+      <time datetime={isoDate(date)}>{formatDate(date)}</time>
+    </li>
+  )}
+  {author && (
+    <li class="meta__item meta__author">
+      <span class="sr-only">Author:</span>
+      <span>{memberName(author)}</span>
+    </li>
+  )}
+  {collabNames.length > 0 && (
+    <li class="meta__item meta__collab">
+      <Icon name="users" size={14} />
+      <span>with {joinNames(collabNames)}</span>
+    </li>
+  )}
+  {hours !== undefined && (
+    <li class="meta__item meta__hours">
+      <Icon name="clock" size={14} />
+      <span class="sr-only">{hoursLabel}:</span>
+      <span>{formatHours(hours)}</span>
+    </li>
+  )}
+</ul>

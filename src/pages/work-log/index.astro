@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WorkLogView from '../../components/WorkLogView.astro';
+import StatRow from '../../components/StatRow.astro';
+import CadenceStrip from '../../components/CadenceStrip.astro';
+import { getWorkLog, workLogStats } from '../../lib/entries';
+import { formatDate, formatHours } from '../../lib/format';
+
+const entries = await getWorkLog();
+const s = workLogStats(entries);
+const stats = [
+  { label: 'Entries', value: String(s.total) },
+  { label: 'Hours logged', value: formatHours(s.hours) },
+  { label: 'Last 14 days', value: String(s.last14) },
+  { label: 'Most recent', value: s.latest ? formatDate(s.latest) : '—' },
+];
+---
+<BaseLayout title="Work Log" description="Individual progress log entries from every team member, with dates, collaborators and time committed.">
+  <WorkLogView
+    current="all"
+    title="Work log"
+    lede="Every entry from every team member, newest first. Each card shows the date, author, collaborators and time committed."
+    entries={entries}
+  >
+    <StatRow stats={stats} />
+    <CadenceStrip entries={entries} />
+  </WorkLogView>
+</BaseLayout>

@@ -1,0 +1,55 @@
+---
+import Section from '../Section.astro';
+import Icon from '../Icon.astro';
+import ContactLink from '../ContactLink.astro';
+import { SITE } from '../../config/site';
+import type { IconName } from '../icons';
+
+const cards: { icon: IconName; title: string; text: string; cta: string; email: string | null }[] = [
+  {
+    icon: 'rocket',
+    title: 'Sponsors',
+    text: 'Funding, parts, manufacturing time and testing facilities all move this project forward.',
+    cta: 'Sponsorship package',
+    email: null, // TODO(Ethan): link to a sponsorship package PDF in public/docs/
+  },
+  {
+    icon: 'handshake',
+    title: 'Teams & Collaborators',
+    text: 'Other capstone teams, clubs and student design teams — we are happy to share notes.',
+    cta: 'Get in touch',
+    email: SITE.contact.general,
+  },
+  {
+    icon: 'graduation-cap',
+    title: 'Faculty & Advisors',
+    text: 'Professors, technical advisors and reviewers who want to follow or guide the work.',
+    cta: 'Contact the team',
+    email: SITE.contact.general,
+  },
+];
+const logoSlots = [1, 2, 3, 4, 5];
+---
+<Section id="reach-out" eyebrow="Get involved" title="Reach out" deck="Ways to support, collaborate with, or advise the team.">
+  <div class="grid grid--3 reveal-group">
+    {cards.map(c => (
+      <article class="reach reveal">
+        <Icon name={c.icon} size={28} class="reach__icon" />
+        <h3>{c.title}</h3>
+        <p>{c.text}</p>
+        <ContactLink email={c.email}>{c.cta}</ContactLink>
+      </article>
+    ))}
+  </div>
+
+  <div class="logos reveal">
+    <p class="eyebrow logos__label">Supported by</p>
+    <ul class="logos__wall" role="list">
+      {logoSlots.map(() => (
+        <li class="logos__slot">
+          <img src="/img/sponsors/your-logo-here.svg" alt="Sponsor logo placeholder: your logo here" width="200" height="100" loading="lazy" decoding="async" />
+        </li>
+      ))}
+    </ul>
+  </div>
+</Section>

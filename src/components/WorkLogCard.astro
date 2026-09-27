@@ -1,0 +1,44 @@
+---
+// The core work-log card (§9.4). Date, author, collaborators and hours are all
+// on the card itself so a grader can score Quality without clicking in.
+import Card from './Card.astro';
+import MetaRow from './MetaRow.astro';
+import Icon from './Icon.astro';
+import { entryHref, type WorkLogEntry } from '../lib/entries';
+import { excerpt, formatDate, isoDate } from '../lib/format';
+
+interface Props {
+  entry: WorkLogEntry;
+}
+const { entry } = Astro.props;
+const { title, date, author, collaborators, timeCommitted, images, draft } = entry.data;
+const thumb = images[0];
+---
+<Card href={entryHref(entry)} class="wl-card reveal">
+  <div class="card__media card__media--4x3">
+    {thumb ? (
+      <img
+        src={thumb.src}
+        alt={thumb.alt}
+        width={thumb.width ?? 800}
+        height={thumb.height ?? 600}
+        loading="lazy"
+        decoding="async"
+      />
+    ) : (
+      <div class="card__fallback" aria-hidden="true">
+        <span>{formatDate(date)}</span>
+      </div>
+    )}
+    {draft && <span class="badge badge--sample">Sample</span>}
+    {images.length > 1 && (
+      <span class="card__count"><Icon name="camera" size={14} /> {images.length}</span>
+    )}
+  </div>
+  <div class="card__body">
+    <time class="card__date" datetime={isoDate(date)}>{formatDate(date)}</time>
+    <h3 class="card__title">{title}</h3>
+    <MetaRow author={author} collaborators={collaborators} hours={timeCommitted} />
+    <p class="card__excerpt">{excerpt(entry.body)}</p>
+  </div>
+</Card>

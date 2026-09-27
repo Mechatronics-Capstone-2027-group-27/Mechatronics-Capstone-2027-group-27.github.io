@@ -1,0 +1,22 @@
+---
+import Eyebrow from './Eyebrow.astro';
+
+interface Props {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  deck?: string;
+  class?: string;
+}
+const { id, title, eyebrow, deck, class: cls } = Astro.props;
+---
+<section id={id} class:list={['section', cls]} aria-labelledby={`${id}-title`}>
+  <div class="container">
+    <header class="section__head reveal">
+      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+      <h2 id={`${id}-title`}>{title}</h2>
+      {deck && <p class="section__deck">{deck}</p>}
+    </header>
+    <slot />
+  </div>
+</section>

@@ -1,0 +1,13 @@
+---
+import ImageFigure from './ImageFigure.astro';
+
+interface Props {
+  images: readonly { src: string; alt: string; caption?: string; width?: number; height?: number }[];
+}
+const { images } = Astro.props;
+---
+{images.length > 0 && (
+  <div class:list={['gallery', { 'gallery--single': images.length === 1 }]}>
+    {images.map((img, i) => <ImageFigure {...img} eager={i === 0} />)}
+  </div>
+)}

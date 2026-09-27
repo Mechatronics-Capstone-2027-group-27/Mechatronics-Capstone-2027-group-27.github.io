@@ -1,0 +1,51 @@
+---
+// Full-bleed hero (§8.1). Art-directed <picture>: a 4:5 crop on narrow screens,
+// 16:9 above that. Both source files live in src/assets/img/ — replace them to
+// swap the photo, no code change.
+import { getImage } from 'astro:assets';
+import Button from './Button.astro';
+import Icon from './Icon.astro';
+import { COURSE, PROJECT, TEAM_NUMBER, isSet } from '../config/site';
+import heroSrc from '../assets/img/hero.jpg';
+import heroMobileSrc from '../assets/img/hero-mobile.jpg';
+
+const widths = [1280, 1920, 2560].filter(w => w <= heroSrc.width);
+const mobileWidths = [540, 1080].filter(w => w <= heroMobileSrc.width);
+const [desktopWebp, desktopJpg, mobileWebp] = await Promise.all([
+  getImage({ src: heroSrc, widths, format: 'webp', quality: 72 }),
+  getImage({ src: heroSrc, widths, format: 'jpg', quality: 72 }),
+  getImage({ src: heroMobileSrc, widths: mobileWidths, format: 'webp', quality: 72 }),
+]);
+---
+<section id="hero" class="hero" aria-labelledby="hero-title">
+  <picture class="hero__bg">
+    <source media="(max-width: 700px)" srcset={mobileWebp.srcSet.attribute} sizes="100vw" type="image/webp" />
+    <source srcset={desktopWebp.srcSet.attribute} sizes="100vw" type="image/webp" />
+    <img
+      src={desktopJpg.src}
+      srcset={desktopJpg.srcSet.attribute}
+      sizes="100vw"
+      width={heroSrc.width}
+      height={heroSrc.height}
+      alt=""
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+  </picture>
+  <div class="hero__scrim" aria-hidden="true"></div>
+  <div class="container hero__content">
+    <p class="eyebrow">Team {TEAM_NUMBER} · {COURSE.institution}</p>
+    <h1 id="hero-title">{PROJECT.name}</h1>
+    <p class="hero__subtitle">{PROJECT.subtitle}</p>
+    {isSet(PROJECT.tagline) && <p class="hero__tagline">{PROJECT.tagline}</p>}
+    <div class="hero__actions">
+      <Button href="/work-log/" icon="arrow-right">View the work log</Button>
+      <Button href="#major-updates" variant="ghost">Latest updates</Button>
+    </div>
+  </div>
+  <a class="hero__cue" href="#about">
+    <span>Scroll</span>
+    <Icon name="chevron-down" size={18} />
+  </a>
+</section>

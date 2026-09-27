@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Button from '../components/Button.astro';
+import Eyebrow from '../components/Eyebrow.astro';
+---
+<BaseLayout title="Page not found">
+  <div class="page page--center">
+    <div class="container">
+      <Eyebrow>Error 404</Eyebrow>
+      <h1>Lost signal</h1>
+      <p class="page__lede">That page doesn't exist — it may have moved when the site was rebuilt.</p>
+      <div class="hero__actions">
+        <Button href="/" icon="arrow-right">Back to the home page</Button>
+        <Button href="/work-log/" variant="ghost">Work log</Button>
+      </div>
+    </div>
+  </div>
+</BaseLayout>

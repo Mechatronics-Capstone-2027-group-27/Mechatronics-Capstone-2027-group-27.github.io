@@ -1,0 +1,8 @@
+---
+import Section from '../Section.astro';
+import TimelineRail from '../TimelineRail.astro';
+import { COURSE } from '../../config/site';
+---
+<Section id="timeline" eyebrow="Schedule" title="Development timeline" deck={`Milestones across ${COURSE.terms.join(' and ')}. Placeholder schedule — the real one arrives with the project plan.`}>
+  <TimelineRail />
+</Section>

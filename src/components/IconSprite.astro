@@ -1,0 +1,9 @@
+---
+// The single inline SVG sprite. Every <Icon> points at a <symbol> in here.
+import { ICONS } from './icons';
+---
+<svg class="icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  {Object.entries(ICONS).map(([name, body]) => (
+    <symbol id={`i-${name}`} viewBox="0 0 24 24" set:html={body} />
+  ))}
+</svg>

@@ -1,0 +1,30 @@
+{
+  "_generated": "DO NOT EDIT — generated from src/config/site.ts by `npm run sync:allowlist`.",
+  "members": [
+    {
+      "slug": "ethan-catz",
+      "name": "Ethan Catz",
+      "github": null
+    },
+    {
+      "slug": "ian-macpherson",
+      "name": "Ian Macpherson",
+      "github": null
+    },
+    {
+      "slug": "david-makarczyk",
+      "name": "David Makarczyk",
+      "github": null
+    },
+    {
+      "slug": "nitya-singh",
+      "name": "Nitya Singh",
+      "github": null
+    },
+    {
+      "slug": "matthew-zelenka",
+      "name": "Matthew Zelenka",
+      "github": null
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+---
+import Icon from './Icon.astro';
+import { COURSE, NAV, POST_ENTRY_URL, PROJECT, SITE, TEAM_NUMBER } from '../config/site';
+import { lastUpdated } from '../lib/entries';
+import { formatDate, isoDate } from '../lib/format';
+
+const updated = await lastUpdated();
+---
+<footer class="footer">
+  <div class="container footer__grid">
+    <div class="footer__id">
+      <p class="eyebrow">Team {TEAM_NUMBER}</p>
+      <p class="footer__name">{PROJECT.name}</p>
+      <p class="footer__sub">{PROJECT.subtitle}</p>
+      <p class="footer__course">{COURSE.code} · {COURSE.institution}</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="footer__links" role="list">
+        {NAV.map(item => <li><a href={item.href}>{item.label}</a></li>)}
+      </ul>
+    </nav>
+    <div class="footer__meta">
+      <a class="footer__repo" href={SITE.repo} target="_blank" rel="noopener noreferrer">
+        <Icon name="github" size={16} /> Source on GitHub<span class="sr-only"> (opens in a new tab)</span>
+      </a>
+      {updated && (
+        <p class="mono">Last updated <time datetime={isoDate(updated)}>{formatDate(updated)}</time></p>
+      )}
+      <a class="post-link" href={POST_ENTRY_URL} target="_blank" rel="noopener noreferrer">
+        Post an update<span class="sr-only"> (team members only, opens GitHub)</span>
+      </a>
+    </div>
+  </div>
+  <div class="container footer__legal">
+    <p>Student capstone project site. Not affiliated with or endorsed by any sponsor.</p>
+  </div>
+</footer>

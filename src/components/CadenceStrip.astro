@@ -1,0 +1,55 @@
+---
+// One row per member, one cell per term week, shaded by entry count (§9.3).
+// Makes gaps and bursts visible at a glance — the Frequency criterion. Counts
+// are always in the cell's label/title, never colour alone.
+import { MEMBERS } from '../config/site';
+import { cadenceRow, termWeeks, type WorkLogEntry } from '../lib/entries';
+import { formatDate, parseDay } from '../lib/format';
+
+interface Props {
+  entries: WorkLogEntry[];
+}
+const { entries } = Astro.props;
+const weeks = termWeeks();
+const level = (n: number) => Math.min(n, 3);
+const plural = (n: number) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
+const termStarts = new Set(weeks.filter((w, i) => i === 0 || weeks[i - 1].term !== w.term).map(w => w.start));
+const rows = MEMBERS.map(m => ({ member: m, counts: cadenceRow(entries, m.slug, weeks) }));
+---
+<figure class="cadence">
+  <figcaption class="cadence__caption">
+    <span>Entries per week, by member</span>
+    <span class="cadence__legend" aria-hidden="true">
+      0 <i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i> 3+
+    </span>
+  </figcaption>
+  <div class="cadence__scroll" tabindex="0" role="region" aria-label="Weekly posting cadence (scrollable)">
+    <div class="cadence__grid">
+      <div class="cadence__row cadence__row--terms" aria-hidden="true">
+        <span class="cadence__name"></span>
+        {weeks.map(w => (
+          <span class:list={['cadence__term', { 'is-term-start': termStarts.has(w.start) }]}>
+            {termStarts.has(w.start) ? w.term : ''}
+          </span>
+        ))}
+      </div>
+      {rows.map(({ member, counts }) => (
+        <div class="cadence__row">
+          <span class="cadence__name">{member.name}</span>
+          {weeks.map((w, i) => {
+            const label = `${member.name}, week of ${formatDate(parseDay(w.start))}: ${w.future ? 'upcoming' : plural(counts[i])}`;
+            return (
+              <span
+                class:list={['cadence__cell', { 'is-future': w.future, 'is-term-start': termStarts.has(w.start) }]}
+                data-level={w.future ? undefined : level(counts[i])}
+                role="img"
+                aria-label={label}
+                title={label}
+              ></span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  </div>
+</figure>

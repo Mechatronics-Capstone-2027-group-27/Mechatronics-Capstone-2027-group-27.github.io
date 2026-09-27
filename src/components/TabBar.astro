@@ -1,0 +1,26 @@
+---
+// Member tabs — real links to real routes, with aria-current (not an ARIA tab widget).
+import { MEMBERS } from '../config/site';
+
+interface Props {
+  current: string; // 'all' or a member slug
+  counts: Record<string, number>;
+  total: number;
+}
+const { current, counts, total } = Astro.props;
+const tabs = [
+  { slug: 'all', label: 'All', href: '/work-log/', count: total },
+  ...MEMBERS.map(m => ({ slug: m.slug, label: m.name, href: `/work-log/${m.slug}/`, count: counts[m.slug] ?? 0 })),
+];
+---
+<nav class="tabs" aria-label="Team members">
+  <ul class="tabs__list" role="list">
+    {tabs.map(t => (
+      <li>
+        <a class="tabs__tab" href={t.href} aria-current={t.slug === current ? 'page' : undefined}>
+          {t.label}<sup class="tabs__count"><span class="sr-only">(</span>{t.count}<span class="sr-only"> {t.count === 1 ? 'entry' : 'entries'})</span></sup>
+        </a>
+      </li>
+    ))}
+  </ul>
+</nav>

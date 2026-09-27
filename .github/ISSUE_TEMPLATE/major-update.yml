@@ -1,0 +1,47 @@
+name: Major update
+description: Post a team-wide milestone to the front page. Team members only.
+title: "[Major update] "
+labels: ["major-update"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Major updates are for the whole team (no author or collaborators) and appear on the front page.
+        At least one image is required.
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      placeholder: Preliminary design review passed
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date
+      description: Leave blank for today.
+      placeholder: YYYY-MM-DD
+    validations:
+      required: false
+  - type: input
+    id: timeCommitted
+    attributes:
+      label: Time committed
+      description: Total team-hours, decimals OK.
+      placeholder: "22"
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: Content
+      description: Markdown supported.
+    validations:
+      required: true
+  - type: textarea
+    id: images
+    attributes:
+      label: Images
+      description: Required. Drag at least one image in here. Put a short description in the [square brackets] — it becomes the alt text.
+    validations:
+      required: true

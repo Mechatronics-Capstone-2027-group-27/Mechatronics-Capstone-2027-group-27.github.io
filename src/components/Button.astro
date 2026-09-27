@@ -1,0 +1,25 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from './icons';
+
+interface Props {
+  href: string;
+  variant?: 'primary' | 'ghost' | 'quiet';
+  icon?: IconName;
+  external?: boolean;
+  todo?: boolean; // marks a placeholder link: greppable via data-todo="link"
+  class?: string;
+}
+const { href, variant = 'primary', icon, external = false, todo = false, class: cls } = Astro.props;
+---
+<a
+  class:list={['btn', `btn--${variant}`, cls]}
+  href={href}
+  data-todo={todo ? 'link' : undefined}
+  target={external ? '_blank' : undefined}
+  rel={external ? 'noopener noreferrer' : undefined}
+>
+  <span><slot /></span>
+  {icon && <Icon name={icon} size={16} />}
+  {external && <span class="sr-only">(opens in a new tab)</span>}
+</a>

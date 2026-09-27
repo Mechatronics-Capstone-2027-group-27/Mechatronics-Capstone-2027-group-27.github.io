@@ -1,0 +1,20 @@
+---
+import Section from '../Section.astro';
+import Icon from '../Icon.astro';
+import { DOCUMENTS } from '../../config/site';
+---
+<Section id="documentation" eyebrow="Deliverables" title="Documentation" deck="Course deliverables, posted as they are produced.">
+  <ul class="docs reveal" role="list">
+    {DOCUMENTS.map(d => (
+      <li class="docs__item">
+        <Icon name="file-text" size={20} />
+        {d.href ? (
+          <a href={d.href}>{d.label}</a>
+        ) : (
+          <span data-todo="link">{d.label} <span class="docs__soon">Coming soon</span></span>
+        )}
+      </li>
+    ))}
+  </ul>
+  <p class="note">Files go in <code>public/docs/</code>; set each <code>href</code> in <code>DOCUMENTS</code> in <code>src/config/site.ts</code>.</p>
+</Section>

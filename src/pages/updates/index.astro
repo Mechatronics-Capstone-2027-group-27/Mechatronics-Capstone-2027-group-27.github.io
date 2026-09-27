@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UpdateCard from '../../components/UpdateCard.astro';
+import EmptyState from '../../components/EmptyState.astro';
+import Eyebrow from '../../components/Eyebrow.astro';
+import { POST_UPDATE_URL } from '../../config/site';
+import { getUpdates } from '../../lib/entries';
+
+const updates = await getUpdates();
+---
+<BaseLayout title="Updates" description="Major team updates: milestones, reviews and results.">
+  <div class="page">
+    <div class="container">
+      <header class="page__head">
+        <Eyebrow>Progress</Eyebrow>
+        <h1>Major updates</h1>
+        <p class="page__lede">Team-wide milestones, reviews and results, newest first.</p>
+      </header>
+      <h2 class="sr-only">All updates</h2>
+      {updates.length > 0 ? (
+        <div class="grid grid--3 reveal-group">
+          {updates.map(u => <UpdateCard entry={u} />)}
+        </div>
+      ) : (
+        <EmptyState title="First update coming soon">
+          <p>Team milestones will appear here as the project progresses.</p>
+        </EmptyState>
+      )}
+      <p class="page__post">
+        <a class="post-link" href={POST_UPDATE_URL} target="_blank" rel="noopener noreferrer">
+          Post a major update<span class="sr-only"> (team members only, opens GitHub)</span>
+        </a>
+      </p>
+    </div>
+  </div>
+</BaseLayout>

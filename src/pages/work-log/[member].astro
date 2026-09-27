@@ -1,0 +1,24 @@
+---
+import type { GetStaticPaths } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WorkLogView from '../../components/WorkLogView.astro';
+import { MEMBERS, isSet, type Member } from '../../config/site';
+import { getMemberEntries } from '../../lib/entries';
+import { formatHours } from '../../lib/format';
+
+export const getStaticPaths = (() =>
+  MEMBERS.map(member => ({ params: { member: member.slug }, props: { member } }))) satisfies GetStaticPaths;
+
+const { member } = Astro.props as { member: Member };
+const entries = await getMemberEntries(member.slug);
+const hours = entries.reduce((sum, e) => sum + e.data.timeCommitted, 0);
+const role = isSet(member.role) ? `${member.role} · ` : '';
+---
+<BaseLayout title={`${member.name} — Work Log`} description={`Work log entries by ${member.name}.`}>
+  <WorkLogView
+    current={member.slug}
+    title={member.name}
+    lede={`${role}${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · ${formatHours(hours)} logged`}
+    entries={entries}
+  />
+</BaseLayout>

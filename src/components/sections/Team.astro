@@ -1,0 +1,43 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+import Section from '../Section.astro';
+import Icon from '../Icon.astro';
+import ContactLink from '../ContactLink.astro';
+import { MEMBERS, isSet } from '../../config/site';
+
+// Portraits resolve by filename from src/assets/img/team/, so swapping a photo is a file replace.
+const photos = import.meta.glob<{ default: ImageMetadata }>('../../assets/img/**/*.{jpg,jpeg,png,webp}', { eager: true });
+const photoFor = (p: string) => photos[`../../assets/img/${p}`]?.default;
+---
+<Section id="team" eyebrow="People" title="The team" deck={`${MEMBERS.length} mechatronics engineering students. Select a name to read their work log.`}>
+  <ul class="grid grid--5 team reveal-group" role="list">
+    {MEMBERS.map(m => {
+      const photo = photoFor(m.photo);
+      return (
+        <li class="member reveal">
+          {photo && (
+            <Image src={photo} alt={`Portrait of ${m.name}`} widths={[300, 600]} sizes="(min-width: 1100px) 240px, (min-width: 600px) 30vw, 50vw" class="member__photo" />
+          )}
+          <h3 class="member__name">
+            <a href={`/work-log/${m.slug}/`}>{m.name}</a>
+          </h3>
+          <p class="member__role">{isSet(m.role) ? m.role : 'Role to be announced'}</p>
+          <div class="member__links">
+            {isSet(m.github) && (
+              <a href={`https://github.com/${m.github}`} target="_blank" rel="noopener noreferrer" aria-label={`${m.name} on GitHub (opens in a new tab)`}>
+                <Icon name="github" size={18} />
+              </a>
+            )}
+            {isSet(m.linkedin) && (
+              <a href={m.linkedin} target="_blank" rel="noopener noreferrer" aria-label={`${m.name} on LinkedIn (opens in a new tab)`}>
+                <Icon name="linkedin" size={18} />
+              </a>
+            )}
+            {m.showEmail && isSet(m.email) && <ContactLink email={m.email} class="btn--icon">Email</ContactLink>}
+          </div>
+        </li>
+      );
+    })}
+  </ul>
+</Section>
