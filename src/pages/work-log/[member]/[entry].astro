@@ -1,0 +1,68 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import MetaRow from '../../../components/MetaRow.astro';
+import Gallery from '../../../components/Gallery.astro';
+import Icon from '../../../components/Icon.astro';
+import Eyebrow from '../../../components/Eyebrow.astro';
+import { memberName } from '../../../config/site';
+import { entryHref, entrySlug, getWorkLog, type WorkLogEntry } from '../../../lib/entries';
+import { excerpt } from '../../../lib/format';
+
+export const getStaticPaths = (async () => {
+  const all = await getWorkLog();
+  return all.map(entry => {
+    // Prev/next within the same member's entries (newest first → "next" is newer).
+    const mine = all.filter(e => e.data.author === entry.data.author);
+    const i = mine.indexOf(entry);
+    return {
+      params: { member: entry.data.author, entry: entrySlug(entry) },
+      props: { entry, older: mine[i + 1], newer: mine[i - 1] },
+    };
+  });
+}) satisfies GetStaticPaths;
+
+const { entry, older, newer } = Astro.props as { entry: WorkLogEntry; older?: WorkLogEntry; newer?: WorkLogEntry };
+const { Content } = await render(entry);
+const d = entry.data;
+---
+<BaseLayout title={d.title} description={excerpt(entry.body, 160)}>
+  <article class="page entry">
+    <div class="container">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/work-log/">Work log</a>
+        <Icon name="chevron-right" size={14} />
+        <a href={`/work-log/${d.author}/`}>{memberName(d.author)}</a>
+      </nav>
+      <header class="entry__head">
+        <Eyebrow>Work log entry {d.draft && <span class="badge badge--sample badge--inline">Sample</span>}</Eyebrow>
+        <h1 class="entry__title">{d.title}</h1>
+        <MetaRow class="meta--large" date={d.date} author={d.author} collaborators={d.collaborators} hours={d.timeCommitted} />
+        {d.tags.length > 0 && (
+          <ul class="tags" role="list" aria-label="Tags">
+            {d.tags.map(t => <li>{t}</li>)}
+          </ul>
+        )}
+      </header>
+      <Gallery images={d.images} />
+      <div class="prose entry__body">
+        <Content />
+      </div>
+      <nav class="pager" aria-label="More entries by this member">
+        {older ? (
+          <a class="pager__link" href={entryHref(older)}>
+            <Icon name="chevron-left" size={16} />
+            <span><span class="pager__hint">Older</span>{older.data.title}</span>
+          </a>
+        ) : <span></span>}
+        {newer && (
+          <a class="pager__link pager__link--next" href={entryHref(newer)}>
+            <span><span class="pager__hint">Newer</span>{newer.data.title}</span>
+            <Icon name="chevron-right" size={16} />
+          </a>
+        )}
+      </nav>
+    </div>
+  </article>
+</BaseLayout>

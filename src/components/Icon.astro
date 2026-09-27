@@ -1,0 +1,22 @@
+---
+// References a symbol from <IconSprite /> (rendered once in BaseLayout).
+import type { IconName } from './icons';
+
+interface Props {
+  name: IconName;
+  size?: number;
+  class?: string;
+  label?: string; // when set, the icon is announced; otherwise it's decorative
+}
+const { name, size = 18, class: cls, label } = Astro.props;
+---
+<svg
+  class:list={['icon', cls]}
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  aria-hidden={label ? undefined : 'true'}
+  role={label ? 'img' : undefined}
+  aria-label={label}
+  focusable="false"
+><use href={`#i-${name}`} /></svg>

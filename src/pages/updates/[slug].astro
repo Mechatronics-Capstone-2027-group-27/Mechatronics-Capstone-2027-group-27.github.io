@@ -1,0 +1,38 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MetaRow from '../../components/MetaRow.astro';
+import Gallery from '../../components/Gallery.astro';
+import Icon from '../../components/Icon.astro';
+import Eyebrow from '../../components/Eyebrow.astro';
+import { getUpdates, type UpdateEntry } from '../../lib/entries';
+import { excerpt } from '../../lib/format';
+
+export const getStaticPaths = (async () =>
+  (await getUpdates()).map(entry => ({ params: { slug: entry.id }, props: { entry } }))) satisfies GetStaticPaths;
+
+const { entry } = Astro.props as { entry: UpdateEntry };
+const { Content } = await render(entry);
+const d = entry.data;
+---
+<BaseLayout title={d.title} description={excerpt(entry.body, 160)}>
+  <article class="page entry">
+    <div class="container">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/updates/">Updates</a>
+        <Icon name="chevron-right" size={14} />
+        <span aria-current="page">This update</span>
+      </nav>
+      <header class="entry__head">
+        <Eyebrow>Major update {d.draft && <span class="badge badge--sample badge--inline">Sample</span>}</Eyebrow>
+        <h1 class="entry__title">{d.title}</h1>
+        <MetaRow class="meta--large" date={d.date} hours={d.timeCommitted} hoursLabel="Team time committed" />
+      </header>
+      <Gallery images={d.images} />
+      <div class="prose entry__body">
+        <Content />
+      </div>
+    </div>
+  </article>
+</BaseLayout>

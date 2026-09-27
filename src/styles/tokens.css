@@ -1,0 +1,61 @@
+/* Design tokens (§11.2). Every colour, size and space on the site comes from here. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — near-black with a cold blue cast, not pure #000 */
+  --bg:            #05070A;
+  --surface:       #0C1017;
+  --surface-2:     #141A24;
+  --line:          rgba(255, 255, 255, 0.10);
+  --line-strong:   rgba(255, 255, 255, 0.22);
+
+  /* Type */
+  --text:          #F2F5F7;
+  --text-dim:      #98A4B3;   /* ≥4.5:1 on --bg — verify before changing */
+  --text-faint:    #5E6B7A;   /* decorative only, never body copy */
+
+  /* Accent — "stratosphere blue". Swap this one value to re-skin the site.
+     UW gold drop-in: #FFC72C */
+  --accent:        #5B8DEF;
+  --accent-hot:    #FF6B35;   /* ignition orange, used sparingly: active states, today marker */
+
+  /* The horizon gradient — the site's one colour event */
+  --grad-horizon:  linear-gradient(180deg, #05070A 0%, #131A3D 45%, #4B2E83 75%, #FF7A45 100%);
+  --grad-scrim:    linear-gradient(180deg, rgba(5,7,10,.85) 0%, rgba(5,7,10,.15) 40%, rgba(5,7,10,.92) 100%);
+
+  /* Type scale — fluid, clamp()-based */
+  --font-display: 'Saira', 'Archivo', system-ui, sans-serif;  /* uppercase, wide tracking */
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;  /* dates, hours, all metadata */
+
+  --step--1: clamp(0.83rem, 0.79rem + 0.18vw, 0.94rem);
+  --step-0:  clamp(1.00rem, 0.95rem + 0.25vw, 1.13rem);
+  --step-1:  clamp(1.25rem, 1.15rem + 0.50vw, 1.60rem);
+  --step-2:  clamp(1.56rem, 1.36rem + 1.00vw, 2.44rem);
+  --step-3:  clamp(1.95rem, 1.58rem + 1.85vw, 3.66rem);
+  --step-4:  clamp(2.44rem, 1.78rem + 3.30vw, 5.61rem);
+
+  --tracking-display: 0.08em;
+  --tracking-eyebrow: 0.18em;
+
+  /* Spacing — 8px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 16px; --s-4: 24px;
+  --s-5: 40px; --s-6: 64px; --s-7: 96px; --s-8: 160px;
+  --section-y: clamp(64px, 10vh, 160px);
+  --measure: 68ch;
+  --container: 1280px;
+  --radius: 2px;   /* near-square. SpaceX-flat, not bubbly. */
+
+  /* Motion and chrome (additions beyond the §11.2 set) */
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur-hover: 150ms;
+  --dur-reveal: 500ms;
+  --nav-h: 64px;
+  --gutter: clamp(16px, 4vw, 40px);
+
+  /* Cadence strip — sequential single-hue ramp derived from --accent */
+  --cad-0: var(--surface-2);
+  --cad-1: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
+  --cad-2: color-mix(in srgb, var(--accent) 65%, var(--surface-2));
+  --cad-3: var(--accent);
+}

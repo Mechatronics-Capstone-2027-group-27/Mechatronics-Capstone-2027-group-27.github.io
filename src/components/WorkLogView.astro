@@ -1,0 +1,44 @@
+---
+// Shared body of /work-log/ (All) and /work-log/<member>/ — header, tabs, card grid.
+import TabBar from './TabBar.astro';
+import WorkLogCard from './WorkLogCard.astro';
+import EmptyState from './EmptyState.astro';
+import Eyebrow from './Eyebrow.astro';
+import { COURSE, POST_ENTRY_URL } from '../config/site';
+import { countsByMember, getWorkLog, type WorkLogEntry } from '../lib/entries';
+
+interface Props {
+  current: string; // 'all' or member slug
+  title: string;
+  lede: string;
+  entries: WorkLogEntry[];
+}
+const { current, title, lede, entries } = Astro.props;
+const all = await getWorkLog();
+---
+<div class="page">
+  <div class="container">
+    <header class="page__head">
+      <Eyebrow>Design log · {COURSE.code}</Eyebrow>
+      <h1>{title}</h1>
+      <p class="page__lede">{lede}</p>
+    </header>
+    <slot />
+    <TabBar current={current} counts={countsByMember(all)} total={all.length} />
+    <h2 class="sr-only">Entries</h2>
+    {entries.length > 0 ? (
+      <div class="grid grid--3 reveal-group">
+        {entries.map(e => <WorkLogCard entry={e} />)}
+      </div>
+    ) : (
+      <EmptyState title="No entries yet">
+        <p>Entries appear here as soon as they are posted.</p>
+      </EmptyState>
+    )}
+    <p class="page__post">
+      <a class="post-link" href={POST_ENTRY_URL} target="_blank" rel="noopener noreferrer">
+        Post an update<span class="sr-only"> (team members only, opens GitHub)</span>
+      </a>
+    </p>
+  </div>
+</div>

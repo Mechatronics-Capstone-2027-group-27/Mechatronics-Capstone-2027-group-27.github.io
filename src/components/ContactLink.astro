@@ -1,0 +1,25 @@
+---
+// Email CTA without a raw mailto in the HTML source (§7.5). The address is
+// stored base64-encoded and reversed in data-mail; src/scripts/site.ts decodes
+// it into a mailto at runtime. Unset addresses render a greppable placeholder.
+import Icon from './Icon.astro';
+import { isSet } from '../config/site';
+
+interface Props {
+  email: string | null | undefined;
+  class?: string;
+}
+const { email, class: cls } = Astro.props;
+const encoded = isSet(email) ? Buffer.from(email).toString('base64').split('').reverse().join('') : undefined;
+---
+{encoded ? (
+  <a class:list={['btn btn--ghost', cls]} href="#reach-out" data-mail={encoded}>
+    <span><slot /></span>
+    <Icon name="mail" size={16} />
+  </a>
+) : (
+  <a class:list={['btn btn--ghost', cls]} href="#" data-todo="link">
+    <span><slot /></span>
+    <Icon name="arrow-right" size={16} />
+  </a>
+)}

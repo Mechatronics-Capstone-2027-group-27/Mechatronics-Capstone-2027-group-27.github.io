@@ -1,0 +1,58 @@
+---
+// Development timeline (§10). Horizontal milestone rail on desktop, vertical
+// list on mobile — same markup, CSS switches the layout. Nodes are evenly
+// spaced (milestone order, not to scale) so no inline positioning is needed.
+import { TIMELINE } from '../config/site';
+import { getTimelineEvents, type TimelineEvent } from '../lib/timeline';
+import { formatDate, isoDate, parseDay } from '../lib/format';
+
+type Item =
+  | { kind: 'term'; label: string }
+  | { kind: 'today'; date: Date }
+  | { kind: 'event'; event: TimelineEvent; up: boolean };
+
+const events = getTimelineEvents();
+const today = isoDate(new Date());
+const items: Item[] = [];
+let lastTerm = '';
+let todayPlaced = false;
+let n = 0;
+
+const termFor = (d: string) => TIMELINE.termBoundaries.find(t => d >= t.start && d <= t.end)?.label ?? '';
+
+for (const event of events) {
+  const term = termFor(event.start);
+  if (term && term !== lastTerm) {
+    items.push({ kind: 'term', label: term });
+    lastTerm = term;
+  }
+  if (!todayPlaced && event.start > today) {
+    items.push({ kind: 'today', date: parseDay(today) });
+    todayPlaced = true;
+  }
+  items.push({ kind: 'event', event, up: n++ % 2 === 0 });
+}
+if (!todayPlaced) items.push({ kind: 'today', date: parseDay(today) });
+
+const statusLabel = { complete: 'Complete', active: 'In progress', upcoming: 'Upcoming' } as const;
+---
+<div class="tl reveal" tabindex="0" role="region" aria-label="Development timeline (scrollable)">
+  <ol class="tl__rail" role="list">
+    {items.map(item =>
+      item.kind === 'term' ? (
+        <li class="tl__term" aria-hidden="true"><span>{item.label}</span></li>
+      ) : item.kind === 'today' ? (
+        <li class="tl__today"><span>Today · <time datetime={isoDate(item.date)}>{formatDate(item.date)}</time></span></li>
+      ) : (
+        <li class:list={['tl__event', `is-${item.event.status}`, { 'is-up': item.up }]}>
+          <span class="tl__node" aria-hidden="true"></span>
+          <div class="tl__label">
+            <time class="tl__date" datetime={item.event.start}>{formatDate(parseDay(item.event.start))}</time>
+            <h3 class="tl__title">{item.event.title}</h3>
+            <p class="tl__status">{statusLabel[item.event.status]}</p>
+          </div>
+        </li>
+      ),
+    )}
+  </ol>
+</div>

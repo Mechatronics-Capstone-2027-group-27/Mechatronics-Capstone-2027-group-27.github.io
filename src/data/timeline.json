@@ -1,0 +1,82 @@
+[
+  {
+    "uid": "placeholder-001",
+    "title": "[Placeholder] Team formed",
+    "start": "2026-09-14",
+    "end": "2026-09-14",
+    "allDay": true,
+    "category": "milestone",
+    "status": "complete",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-002",
+    "title": "[Placeholder] Proposal submitted",
+    "start": "2026-10-03",
+    "end": "2026-10-03",
+    "allDay": true,
+    "category": "milestone",
+    "status": "active",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-003",
+    "title": "[Placeholder] Design review 1",
+    "start": "2026-10-30",
+    "end": "2026-10-30",
+    "allDay": true,
+    "category": "review",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-004",
+    "title": "[Placeholder] Milestone A",
+    "start": "2026-11-20",
+    "end": "2026-11-20",
+    "allDay": true,
+    "category": "milestone",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-005",
+    "title": "[Placeholder] End-of-term deliverable",
+    "start": "2026-12-04",
+    "end": "2026-12-04",
+    "allDay": true,
+    "category": "deliverable",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-006",
+    "title": "[Placeholder] Milestone B",
+    "start": "2027-01-29",
+    "end": "2027-01-29",
+    "allDay": true,
+    "category": "milestone",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-007",
+    "title": "[Placeholder] Design review 2",
+    "start": "2027-02-26",
+    "end": "2027-02-26",
+    "allDay": true,
+    "category": "review",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  },
+  {
+    "uid": "placeholder-008",
+    "title": "[Placeholder] Final symposium",
+    "start": "2027-03-26",
+    "end": "2027-03-26",
+    "allDay": true,
+    "category": "milestone",
+    "status": "upcoming",
+    "description": "Placeholder milestone — replace when the real schedule is set."
+  }
+]

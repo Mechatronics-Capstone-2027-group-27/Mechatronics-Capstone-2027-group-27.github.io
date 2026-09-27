@@ -1,0 +1,52 @@
+---
+import Icon from './Icon.astro';
+import { BRAND, NAV } from '../config/site';
+
+interface Props {
+  /** Transparent over the hero until the page scrolls (home page only). */
+  overlay?: boolean;
+}
+const { overlay = false } = Astro.props;
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => !href.includes('#') && path.startsWith(href);
+---
+<header class:list={['nav', { 'nav--overlay': overlay, 'is-solid': !overlay }]} data-nav>
+  <div class="container nav__inner">
+    <a class="nav__brand" href="/">
+      <span class="nav__mark" aria-hidden="true"></span>
+      <span>{BRAND}</span>
+    </a>
+    <nav class="nav__primary" aria-label="Primary">
+      <ul class="nav__links" role="list">
+        {NAV.map(item => (
+          <li>
+            <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-menu" data-nav-open>
+      <Icon name="menu" size={22} />
+      <span class="sr-only">Open menu</span>
+    </button>
+  </div>
+
+  <div class="nav__menu" id="nav-menu" role="dialog" aria-modal="true" aria-label="Site menu" hidden data-nav-menu>
+    <div class="container nav__menu-head">
+      <span class="nav__brand">{BRAND}</span>
+      <button class="nav__toggle" type="button" data-nav-close>
+        <Icon name="x" size={22} />
+        <span class="sr-only">Close menu</span>
+      </button>
+    </div>
+    <nav class="container" aria-label="Mobile">
+      <ul class="nav__menu-links" role="list">
+        {NAV.map(item => (
+          <li>
+            <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined} data-nav-link>{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  </div>
+</header>

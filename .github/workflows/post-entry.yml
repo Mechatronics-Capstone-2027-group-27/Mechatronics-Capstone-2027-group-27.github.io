@@ -1,0 +1,98 @@
+# Issue form → Markdown file → commit to main (§7.1).
+# Only people in .github/allowlist.json (generated from src/config/site.ts) can post;
+# everyone else's issue is closed with a polite comment. Uses the built-in GITHUB_TOKEN only.
+name: Post log entry
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write # to start the deploy workflow — pushes made with GITHUB_TOKEN don't trigger it
+
+concurrency:
+  group: post-entry # one at a time, so two posts never race on the push
+  cancel-in-progress: false
+
+jobs:
+  post:
+    if: >-
+      github.event.issue.state == 'open' &&
+      (contains(github.event.issue.labels.*.name, 'work-log') ||
+       contains(github.event.issue.labels.*.name, 'major-update'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Build entry from issue
+        id: entry
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # used only to download images attached to the issue
+        with:
+          script: |
+            const run = require('./.github/scripts/post-entry.cjs');
+            await run({ github, context, core, root: process.cwd(), token: process.env.GITHUB_TOKEN });
+
+      - name: Not a team member — comment and close
+        if: steps.entry.outputs.result == 'rejected'
+        uses: actions/github-script@v7
+        env:
+          MESSAGE: ${{ steps.entry.outputs.message }}
+        with:
+          script: |
+            const issue_number = context.payload.issue.number;
+            await github.rest.issues.createComment({ ...context.repo, issue_number, body: process.env.MESSAGE });
+            await github.rest.issues.update({ ...context.repo, issue_number, state: 'closed', state_reason: 'not_planned' });
+
+      - name: Invalid entry — explain and leave open
+        if: steps.entry.outputs.result == 'invalid'
+        uses: actions/github-script@v7
+        env:
+          MESSAGE: ${{ steps.entry.outputs.message }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.payload.issue.number,
+              body: `This entry couldn't be posted yet:\n\n${process.env.MESSAGE}\n\nEdit the issue to fix it — it will be retried automatically.`,
+            });
+            core.setFailed('Entry failed validation; details commented on the issue.');
+
+      - name: Commit and push
+        if: steps.entry.outputs.result == 'written'
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          FILE: ${{ steps.entry.outputs.file }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content public/img
+          git commit -m "Add log entry from #${ISSUE}: ${FILE}"
+          git push
+
+      - name: Start deploy
+        if: steps.entry.outputs.result == 'written'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref "${{ github.event.repository.default_branch }}" --repo "${{ github.repository }}"
+
+      - name: Comment with link and close
+        if: steps.entry.outputs.result == 'written'
+        uses: actions/github-script@v7
+        env:
+          URL: ${{ steps.entry.outputs.url }}
+          FILE: ${{ steps.entry.outputs.file }}
+        with:
+          script: |
+            const issue_number = context.payload.issue.number;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number,
+              body: `Posted! It will be live in a couple of minutes at ${process.env.URL}\n\nFile: \`${process.env.FILE}\``,
+            });
+            await github.rest.issues.update({ ...context.repo, issue_number, state: 'closed', state_reason: 'completed' });

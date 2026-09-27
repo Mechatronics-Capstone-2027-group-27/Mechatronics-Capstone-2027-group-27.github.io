@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
+  <defs><pattern id="h" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="24" stroke="#ffffff" stroke-opacity="0.035" stroke-width="10"/></pattern></defs>
+  <rect width="1600" height="1200" fill="#141A24"/>
+  <rect width="1600" height="1200" fill="url(#h)"/>
+  <rect x="0.5" y="0.5" width="1599" height="1199" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, Consolas, monospace" font-size="55" letter-spacing="6.6" fill="#98A4B3">SYSTEM DIAGRAM · ~4:3 · SVG</text>
+  <text x="50%" y="688" text-anchor="middle" dominant-baseline="middle" font-family="JetBrains Mono, Consolas, monospace" font-size="30" fill="#5E6B7A">PLACEHOLDER · highest-value image on the site</text>
+</svg>

@@ -1,0 +1,24 @@
+---
+// A user-posted image (public/img/...). Plain <img> with explicit dimensions so
+// there's no layout shift; lazy by default.
+interface Props {
+  src: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+  eager?: boolean;
+}
+const { src, alt, caption, width = 1600, height = 1200, eager = false } = Astro.props;
+---
+<figure class="figure">
+  <img
+    src={src}
+    alt={alt}
+    width={width}
+    height={height}
+    loading={eager ? 'eager' : 'lazy'}
+    decoding="async"
+  />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

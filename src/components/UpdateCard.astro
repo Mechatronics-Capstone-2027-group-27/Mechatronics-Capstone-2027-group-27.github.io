@@ -1,0 +1,36 @@
+---
+import Card from './Card.astro';
+import Icon from './Icon.astro';
+import { updateHref, type UpdateEntry } from '../lib/entries';
+import { excerpt, formatDate, formatHours, isoDate } from '../lib/format';
+
+interface Props {
+  entry: UpdateEntry;
+}
+const { entry } = Astro.props;
+const { title, date, timeCommitted, images, draft, featured } = entry.data;
+const img = images[0];
+---
+<Card href={updateHref(entry)} class="up-card reveal">
+  <div class="card__media card__media--3x2">
+    <img
+      src={img.src}
+      alt={img.alt}
+      width={img.width ?? 900}
+      height={img.height ?? 600}
+      loading="lazy"
+      decoding="async"
+    />
+    {draft && <span class="badge badge--sample">Sample</span>}
+    {featured && !draft && <span class="badge">Featured</span>}
+  </div>
+  <div class="card__body">
+    <time class="card__date" datetime={isoDate(date)}>{formatDate(date)}</time>
+    <h3 class="card__title">{title}</h3>
+    <p class="card__excerpt card__excerpt--2">{excerpt(entry.body, 180)}</p>
+    <div class="card__foot">
+      <span class="card__stat"><Icon name="clock" size={14} /> {formatHours(timeCommitted)} <span class="sr-only">team time</span></span>
+      <Icon name="arrow-right" size={18} class="card__arrow" />
+    </div>
+  </div>
+</Card>

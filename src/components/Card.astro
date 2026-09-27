@@ -1,0 +1,11 @@
+---
+// Base card: the whole card is one link — no nested interactive elements inside.
+interface Props {
+  href: string;
+  class?: string;
+}
+const { href, class: cls } = Astro.props;
+---
+<a class:list={['card', cls]} href={href}>
+  <slot />
+</a>

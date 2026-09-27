@@ -1,0 +1,23 @@
+---
+import Section from '../Section.astro';
+import UpdateCard from '../UpdateCard.astro';
+import EmptyState from '../EmptyState.astro';
+import Button from '../Button.astro';
+import { getUpdates } from '../../lib/entries';
+
+const updates = (await getUpdates()).slice(0, 4);
+---
+<Section id="major-updates" eyebrow="Progress" title="Major updates" deck="Milestones, reviews and results from the whole team.">
+  {updates.length > 0 ? (
+    <div class="grid grid--4 reveal-group">
+      {updates.map(u => <UpdateCard entry={u} />)}
+    </div>
+  ) : (
+    <EmptyState title="First update coming soon">
+      <p>Team milestones will appear here as the project progresses.</p>
+    </EmptyState>
+  )}
+  <div class="section__more">
+    <Button href="/updates/" variant="ghost" icon="arrow-right">View all updates</Button>
+  </div>
+</Section>
