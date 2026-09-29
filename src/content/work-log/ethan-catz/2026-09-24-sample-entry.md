@@ -9,7 +9,7 @@ images:
     alt: "Placeholder image for Presentation"
     caption: "[Presentation] Placeholder photo"
 tags: [Deliverables, Presentations]
-draft: true
+draft: false
 ---
 
 ## What I worked on
