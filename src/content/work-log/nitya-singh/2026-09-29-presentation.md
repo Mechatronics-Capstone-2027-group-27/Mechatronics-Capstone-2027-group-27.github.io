@@ -1,5 +1,5 @@
 ---
-title: "Sample entry — placeholder electronics layout"
+title: "Work Log Entry 1: Presentation"
 date: 2026-09-25
 author: nitya-singh
 collaborators: [ethan-catz,matthew-zelenka,ian-macpherson,david-makarczyk]
