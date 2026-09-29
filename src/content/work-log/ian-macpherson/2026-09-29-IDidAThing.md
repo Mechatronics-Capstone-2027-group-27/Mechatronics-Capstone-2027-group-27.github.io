@@ -1,5 +1,5 @@
 ---
-title: "Updated Slide Show 2.0   # required, 5–120 characters
+title: "Updated Slide Show 2.0 "  # required, 5–120 characters
 date: 2026-09-29                                     # required, YYYY-MM-DD, not in the future
 author: ian-macpherson                                  # required, your slug, must match the folder name
 collaborators: [ethan-catz, matthew-zelenka,nitya-singh,david-makarczyk]         # optional, other members' slugs, don't include yourself
