@@ -6,6 +6,11 @@
 //
 // Anything here that fails makes `npm run build` fail with the file path in the
 // message. That is the §2 "dates and names on all entries" guarantee.
+//
+// The objects are strict: a frontmatter key the schema doesn't know (a typo such as
+// `colaborators`) is an error, not something silently dropped.
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
@@ -25,8 +30,34 @@ const pastDate = z.coerce
     error: 'date is in the future — almost always a typo',
   });
 
-const image = z.object({
-  src: z.string().min(1),
+/**
+ * Frontmatter images are string paths into public/ (see CLAUDE.md → Images), so nothing
+ * else checks them. The name is compared exactly: GitHub Pages is case-sensitive even
+ * when the laptop that wrote the entry is not.
+ */
+const isExternal = (src: string) => /^https?:\/\//.test(src);
+function publicFileExists(src: string) {
+  const file = path.join(process.cwd(), 'public', src);
+  try {
+    return fs.readdirSync(path.dirname(file)).includes(path.basename(file));
+  } catch {
+    return false;
+  }
+}
+
+const imageSrc = z
+  .string()
+  .min(1)
+  .refine(src => src.startsWith('/') || isExternal(src), {
+    error: issue => `image src "${String(issue.input)}" must be a path from the site root, e.g. /img/work-log/photo.jpg`,
+  })
+  .refine(src => !src.startsWith('/') || publicFileExists(src), {
+    error: issue =>
+      `image file not found: public${String(issue.input)} — check the spelling and the upper/lower case of the file name`,
+  });
+
+const image = z.strictObject({
+  src: imageSrc,
   alt: z.string({ error: 'every image needs alt text' }).min(1, { error: 'every image needs alt text' }),
   caption: z.string().optional(),
   width: z.number().int().positive().optional(),
@@ -60,7 +91,7 @@ function workLogId({ entry, data }: { entry: string; data: Record<string, unknow
 const workLog = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/work-log', generateId: workLogId }),
   schema: z
-    .object({
+    .strictObject({
       title: z.string({ error: 'title is required' }).min(5).max(120),
       date: pastDate,
       author: memberSlug('author'),
@@ -85,7 +116,7 @@ const workLog = defineCollection({
 
 const updates = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/updates' }),
-  schema: z.object({
+  schema: z.strictObject({
     title: z.string({ error: 'title is required' }).min(5).max(120),
     date: pastDate,
     timeCommitted: z.number({ error: 'timeCommitted is required (team-hours)' }).positive(),

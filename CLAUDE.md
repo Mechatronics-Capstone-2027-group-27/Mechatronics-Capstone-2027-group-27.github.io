@@ -54,6 +54,8 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 
 `.github/workflows/deploy.yml` builds and publishes to Pages on push to `main`. Repo Settings → Pages → Source must be **GitHub Actions**.
 
+`.github/workflows/ci.yml` (workflow `CI`, job `build`) runs `npm run check:allowlist`, `npm ci`, `npm run build` and `npm run test:post` on every pull request to `main` and every push to it. Keep those two names — "CI / build" is the status check a ruleset would require. The content schemas are strict: an unknown frontmatter key, or a frontmatter image path with no matching file in `public/` (case-sensitive), fails the build.
+
 ## Phase 2 options (not built)
 
 - Member-only UI: Cloudflare Access in front of a `/crew` route; Netlify Identity if the site moves off Pages; Decap CMS or Sveltia CMS at `/admin` with GitHub OAuth (needs a small OAuth proxy).
