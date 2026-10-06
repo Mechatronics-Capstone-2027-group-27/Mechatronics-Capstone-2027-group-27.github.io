@@ -18,7 +18,6 @@ export async function visibleSections(): Promise<SectionId[]> {
     timeline: FEATURES.timeline && getTimelineEvents().length > 0,
     team: FEATURES.team,
     documentation: FEATURES.documentation && DOCUMENTS.some(d => d.href),
-    monday: FEATURES.mondayEmbed,
   };
   return SECTION_ORDER.filter(s => show[s]);
 }

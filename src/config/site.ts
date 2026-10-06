@@ -37,8 +37,10 @@ export const SITE = {
   // Org confirmed from the git remote.
   repo: 'https://github.com/Mechatronics-Capstone-2027-group-27/Mechatronics-Capstone-2027-group-27.github.io',
   defaultBranch: 'main',
-  // Carried over from the original index.html — do not drop this.
-  mondayEmbedUrl: 'https://view.monday.com/embed/18430865192-ed103e6932e15b93aa887683ad4e9fef?r=use1',
+  // The monday.com board is deliberately NOT on the site (decided 2026-10-06: we don't
+  // want it public). It is still the team's working tool. This is its embed URL, kept
+  // here because it is not easy to recover — README.md says how to bring the section back.
+  // mondayEmbedUrl: 'https://view.monday.com/embed/18430865192-ed103e6932e15b93aa887683ad4e9fef?r=use1',
   // Contact routing. Rendered obfuscated (§7.5), never as a raw mailto in the HTML source.
   contact: {
     // The member who answers enquiries: a slug from MEMBERS. Their name (and role, once
@@ -80,7 +82,6 @@ export const SECTION_ORDER = [
   'timeline',
   'team',
   'documentation',
-  'monday',
 ] as const;
 
 /**
@@ -95,7 +96,6 @@ export const FEATURES = {
   timeline: false, // TODO(Ethan): needs real milestones in src/data/timeline.json
   team: true,
   documentation: true, // shows itself once a DOCUMENTS entry has an href
-  mondayEmbed: true,
   workLog: true,
   /**
    * Development only. When true, entries with `draft: true` render with a SAMPLE badge;

@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Nothing that belongs in `src/config/site.ts` (member names, team number, project name, emails, URLs) may be hardcoded anywhere else.
 - Do not invent project content (specs, results, sponsors, log entries). Use a bracketed `[TODO: …]` placeholder.
 - No third-party analytics, trackers, CDN fonts or scripts. Don't add dependencies without saying why.
+- The monday.com project board is deliberately **not** on the site (decided 2026-10-06: the team does not want it public). The earlier rule to keep the embed — §1.3 and rule 6 of `CLAUDE-CODE-BUILD-PROMPT.md`, and the old "do not drop this" comment in `site.ts` — is retired. Do not restore the section, link to the board, or print its URL. The URL is kept commented out in `src/config/site.ts`; `README.md` says how to bring the section back if the team asks.
 
 ## What this is
 

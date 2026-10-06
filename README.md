@@ -45,7 +45,7 @@ anywhere else in the code.
 |---|---|
 | `TEAM_NUMBER`, `COURSE` | Team number, course code, institution, terms |
 | `PROJECT` | `name`, `subtitle`, `shortName` (nav brand), `tagline` (hero and link previews), `summary` and `objectives` (About section) |
-| `SITE` | Site URL, repo URL, the monday.com embed URL, and `contact`: `person` (the member who answers enquiries), `general` and `sponsorship` addresses |
+| `SITE` | Site URL, repo URL, and `contact`: `person` (the member who answers enquiries), `general` and `sponsorship` addresses |
 | `MEMBERS` | One line per person: `slug`, `name`, `github`, `email`/`showEmail`, `linkedin`, `role`, `photo` |
 | `SECTION_ORDER` | Order of the front-page sections |
 | `FEATURES` | On/off switch for each section |
@@ -74,7 +74,28 @@ A visitor should never see a placeholder. A front-page section appears only when
 | Development timeline | `timeline` | at least one event in `src/data/timeline.json` | Add the real milestones, then `timeline: true` |
 | The team | `team` | — | |
 | Documentation | `documentation` | at least one `DOCUMENTS` entry with an `href` | Add a document (below) — it appears by itself |
-| Project board | `mondayEmbed` | — | |
+
+### The monday.com board is not on the site
+
+This is deliberate (decided 2026-10-06): the board is the team's working tool and we do not want it public. The
+site used to embed it in a "Project board" section; that section, its switch and its styles have been removed.
+Do not add it back without the team agreeing to.
+
+The embed URL is kept, commented out, as `mondayEmbedUrl` in `SITE` in `src/config/site.ts`, because it is not
+easy to find again. If we change our minds:
+
+1. Uncomment `mondayEmbedUrl` in `src/config/site.ts`.
+2. Find the commit that removed it: `git log --diff-filter=D --oneline -- src/components/sections/Monday.astro`.
+   Call its hash `<removal>`. Restore the component from just before it:
+   `git restore --source=<removal>^ -- src/components/sections/Monday.astro`
+3. Restore its styles: copy the "Monday embed" block out of `git show <removal>^:src/styles/components.css`
+   back into `src/styles/components.css`.
+4. In `src/config/site.ts`, add `'monday'` to `SECTION_ORDER` and `mondayEmbed: true` to `FEATURES`.
+5. In `src/lib/sections.ts`, add `monday: FEATURES.mondayEmbed` to the list.
+6. In `src/pages/index.astro`, import `Monday` and render it for `'monday'`, like the other sections.
+7. `npm run build`.
+
+Anyone with the embed link can view the board without signing in, so treat the URL itself as not-for-sharing.
 
 ### Contact, and the "Coming soon" cards
 

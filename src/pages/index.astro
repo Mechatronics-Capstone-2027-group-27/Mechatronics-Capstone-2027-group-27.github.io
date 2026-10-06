@@ -11,7 +11,6 @@ import ReachOut from '../components/sections/ReachOut.astro';
 import Timeline from '../components/sections/Timeline.astro';
 import Team from '../components/sections/Team.astro';
 import Documentation from '../components/sections/Documentation.astro';
-import Monday from '../components/sections/Monday.astro';
 import { IMAGES } from '../config/site';
 import { visibleSections } from '../lib/sections';
 import band from '../assets/img/band-1.jpg';
@@ -35,7 +34,6 @@ const sections = await visibleSections();
     s === 'reach-out' ? <ReachOut /> :
     s === 'timeline' ? <Timeline /> :
     s === 'team' ? <Team /> :
-    s === 'documentation' ? <Documentation /> :
-    s === 'monday' ? <Monday /> : null
+    s === 'documentation' ? <Documentation /> : null
   ))}
 </BaseLayout>
