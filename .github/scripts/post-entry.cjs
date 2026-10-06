@@ -5,12 +5,17 @@
 //   await run({ github, context, core, root: process.cwd() });       // build the entry
 //   await run.report({ github, context, core, entry, pushStatus });  // comment, close, summarise
 //
-// run() ALWAYS sets the `result` output — one of:
+// run() ALWAYS sets the `entry_result` output — one of:
 //   skip | rejected | invalid | written | duplicate | misconfigured | error
 // plus: issue, title, trigger, kind, via, login, matched, author, file, url, message, fingerprint.
 // It never commits — the workflow does that between run() and report().
 //
-// Tested offline by `npm run test:post` (scripts/test-post-entry.mjs).
+// The output must NOT be called `result`: actions/github-script writes its script
+// block's return value to an output of that name after the block finishes, which
+// overwrites anything set here. That silently broke every post once.
+//
+// Tested offline by `npm run test:post` (scripts/test-post-entry.mjs), which runs the
+// workflow's real script blocks the way github-script does.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -209,9 +214,12 @@ module.exports = async function run({
   fetchImage = download,
 }) {
   // Everything learned so far, so even an early exit reports the kind, author, etc.
+  core.info(`[post-entry] entered run() — event ${context.eventName}, issue_number input "${issueNumber || ''}"`);
   const out = {};
+  // Every exit goes through here, so the log always ends with the path taken.
   const done = (result, extra = {}) => {
-    Object.assign(out, extra, { result });
+    Object.assign(out, extra, { entry_result: result });
+    core.info(`[post-entry] exit: ${result}${out.message ? ` — ${String(out.message).split('\n')[0]}` : ''}`);
     for (const [k, v] of Object.entries(out)) core.setOutput(k, v == null ? '' : String(v));
     return { ...out };
   };
@@ -238,6 +246,7 @@ module.exports = async function run({
     const { kind, via } = detectKind(issue, f);
     out.kind = kind || 'none';
     out.via = via;
+    core.info(`[post-entry] issue #${number} by @${issue.user.login}, state ${issue.state}, kind ${out.kind} (via ${via})`);
     if (!kind) {
       return done('skip', {
         message: 'Not a log entry: no kind marker or "Entry type" field in the body, no work-log / major-update label, and no "[Work log]" / "[Major update]" title prefix.',
@@ -281,6 +290,7 @@ module.exports = async function run({
     }
     out.matched = 'yes';
     out.author = author.slug;
+    core.info(`[post-entry] allowlist match: ${author.slug}`);
 
     // ── Step 2: parse and validate ─────────────────────────────────────
     const errors = [];
@@ -313,6 +323,7 @@ module.exports = async function run({
     // Identifies this exact version of the issue, so the same errors aren't commented twice.
     const fingerprint = crypto.createHash('sha1').update(`${issue.title}\n${issue.body || ''}`).digest('hex').slice(0, 12);
     if (errors.length) return done('invalid', { fingerprint, message: errors.map(e => `- ${e}`).join('\n') });
+    core.info(`[post-entry] validation passed; ${images.length} image(s) to download`);
 
     // ── Download images ────────────────────────────────────────────────
     // The issue number keeps two posts running at once from picking the same file name.
@@ -377,7 +388,7 @@ const HEADLINES = {
 /**
  * Runs on every path, after the commit step: comments on the issue, closes it when
  * appropriate, starts the deploy, fails the job when something went wrong, and
- * writes the run summary. `entry` is the outputs of run(); `pushStatus` is the
+ * writes the run summary. `entry` is the build step's outputs; `pushStatus` is the
  * commit step's `status` output (pushed | protected | denied | rebase-failed |
  * failed | nothing), empty when that step didn't run.
  */
@@ -390,7 +401,8 @@ module.exports.report = async function report({
   pushLogFile = '',
   defaultBranch = 'main',
 }) {
-  const result = entry.result || '';
+  // `entry.result` is github-script's own output, not ours — never read it.
+  const result = entry.entry_result || '';
   const issue_number = Number(entry.issue) || context.payload.issue?.number || 0;
   const runUrl = `${context.serverUrl || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
   const replay = `re-run it from **Actions → Post log entry → Run workflow** with issue number \`${issue_number}\``;

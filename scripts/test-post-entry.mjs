@@ -1,9 +1,16 @@
 // Offline dry run of the posting pipeline:  npm run test:post
 //
-// Feeds .github/scripts/post-entry.cjs fake issues and checks what it would do.
-// Nothing here touches the network or the repo: the GitHub API, the image download
-// and the Actions `core` object are stubs, and files are written to a temp folder.
-// The team in these tests is made up on purpose — the real one lives in src/config/site.ts.
+// This does NOT call post-entry.cjs directly. It reads .github/workflows/post-entry.yml,
+// pulls out the real `script:` blocks, and runs them the way actions/github-script does:
+// same arguments, same `require`, and — the part that matters — the same handling of
+// outputs. github-script writes the script block's return value to an output called
+// `result` AFTER the block finishes, so anything our code stored under that name is
+// overwritten. The harness reproduces that, then reads outputs back exactly as the
+// workflow does (`steps.entry.outputs.*` and `toJSON(steps.entry.outputs)`).
+//
+// Nothing touches the network or the repo: the GitHub API and `fetch` are stubs and
+// files are written to a temp folder. The team in these tests is made up on purpose —
+// the real one lives in src/config/site.ts.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,9 +20,92 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const run = require('../.github/scripts/post-entry.cjs');
-const { report, parseForm, detectKind, FIELD_ORDER } = run;
+const SCRIPT_PATH = path.join(repoRoot, '.github', 'scripts', 'post-entry.cjs');
+const { parseForm, detectKind, FIELD_ORDER } = require(SCRIPT_PATH);
 
+// ── The workflow, as written ──────────────────────────────────────────
+const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'post-entry.yml'), 'utf8').replace(/\r\n/g, '\n');
+
+/** One step of the `post` job: its github-script `script:` block, `if:` and result-encoding. */
+function workflowStep(name) {
+  const lines = workflow.split('\n');
+  const start = lines.findIndex(l => l.trim() === `- name: ${name}`);
+  assert.notEqual(start, -1, `post-entry.yml has no step named "${name}"`);
+  let end = lines.findIndex((l, i) => i > start && /^ {6}- /.test(l));
+  if (end === -1) end = lines.length;
+  const block = lines.slice(start, end);
+  const at = block.findIndex(l => /^\s+script: \|\s*$/.test(l));
+  let script = null;
+  if (at !== -1) {
+    const indent = block[at].match(/^ */)[0].length;
+    const body = [];
+    for (const l of block.slice(at + 1)) {
+      if (l.trim() !== '' && l.match(/^ */)[0].length <= indent) break;
+      body.push(l);
+    }
+    script = body.join('\n');
+  }
+  return {
+    script,
+    condition: block.find(l => /^\s+if: /.test(l))?.replace(/^\s+if:\s*/, '').trim(),
+    encoding: block.find(l => /^\s+result-encoding: /.test(l))?.split(':')[1].trim() || 'json',
+  };
+}
+const BUILD = workflowStep('Build entry from issue');
+const COMMIT = workflowStep('Commit and push');
+const REPORT = workflowStep('Report outcome');
+
+/** `steps.entry.outputs.<name> == '<value>'` — the only shape of condition the workflow uses. */
+const gate = COMMIT.condition?.match(/^steps\.entry\.outputs\.(\w+) == '(\w+)'$/);
+assert.ok(gate, `"Commit and push" has an if: this harness cannot read: ${COMMIT.condition}`);
+const [, RESULT_KEY, WRITTEN] = gate;
+
+/** @actions/core's setOutput: every value becomes a string; the last write to a name wins. */
+function fakeCore() {
+  const core = {
+    outputs: {},
+    failures: [],
+    notices: [],
+    log: [],
+    summaryText: '',
+    setOutput(k, v) { this.outputs[k] = v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v); },
+    setFailed(m) { this.failures.push(String(m)); },
+    notice(m) { this.notices.push(String(m)); },
+    info(m) { this.log.push(String(m)); },
+  };
+  core.summary = {
+    addRaw(text) { core.summaryText += text; return this; },
+    async write() {},
+  };
+  return core;
+}
+
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+
+/**
+ * Runs one `script:` block as actions/github-script would: wraps it in an async function,
+ * resolves relative require() from the workspace, and afterwards sets the `result` output
+ * to the block's return value. `module` swaps post-entry.cjs for a stub.
+ */
+async function githubScript(step, { github, context, env, cwd, module }) {
+  const core = fakeCore();
+  const scriptRequire = id => {
+    if (!id.startsWith('.')) return require(id);
+    const file = path.resolve(repoRoot, id);
+    return module !== undefined && file === SCRIPT_PATH ? module : require(file);
+  };
+  const scriptProcess = { env, cwd: () => cwd };
+  try {
+    const fn = new AsyncFunction('github', 'context', 'core', 'require', 'process', step.script);
+    const value = await fn(github, context, core, scriptRequire, scriptProcess);
+    core.setOutput('result', step.encoding === 'string' ? String(value) : JSON.stringify(value));
+  } catch (err) {
+    core.setFailed(`Unhandled error: ${err}`);
+  }
+  return core;
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────
 const TEAM = [
   { slug: 'ada-one', name: 'Ada One', github: 'ada1' },
   { slug: 'bo-two', name: 'Bo Two', github: 'BoTwo' },
@@ -24,10 +114,10 @@ const TEAM = [
 const EMPTY_TEAM = TEAM.map(m => ({ ...m, github: null }));
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+const JPG = Buffer.from('ffd8ffe000104a4649460001', 'hex');
 const ATTACHMENT = 'https://github.com/user-attachments/assets/11111111-2222-3333-4444-555555555555';
 const ATTACHMENT_2 = 'https://github.com/user-attachments/assets/66666666-7777-8888-9999-000000000000';
 
-// ── Builders ──────────────────────────────────────────────────────────
 const section = (label, value) => `### ${label}\n\n${value === '' ? '_No response_' : value}`;
 
 /** An issue body exactly as GitHub renders a submitted issue form. */
@@ -66,8 +156,8 @@ function makeIssue(kind, o = {}, form = {}) {
   };
 }
 
-/** Stubs for one run: a temp repo root, a fake GitHub client, a fake `core`. */
-function harness(issue, { team = TEAM, comments = [], eventName = 'issues', deployFails = false, apiFails = false } = {}) {
+/** One fake job: a temp workspace, a fake GitHub API and a fake network. */
+function harness(issue, { team = TEAM, comments = [], eventName = 'issues', deployFails = false, apiFails = false, imageStatus = 200 } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g27-post-'));
   fs.mkdirSync(path.join(root, '.github'), { recursive: true });
   fs.writeFileSync(path.join(root, '.github', 'allowlist.json'), JSON.stringify({ members: team }));
@@ -93,19 +183,6 @@ function harness(issue, { team = TEAM, comments = [], eventName = 'issues', depl
     },
     paginate: async () => comments,
   };
-  const core = {
-    outputs: {},
-    failures: [],
-    notices: [],
-    summaryText: '',
-    setOutput(k, v) { this.outputs[k] = v; },
-    setFailed(m) { this.failures.push(m); },
-    notice(m) { this.notices.push(m); },
-  };
-  core.summary = {
-    addRaw(text) { core.summaryText += text; return this; },
-    async write() {},
-  };
   const context = {
     eventName,
     payload: eventName === 'issues' ? { action: 'opened', issue: { number: issue.number } } : {},
@@ -113,33 +190,84 @@ function harness(issue, { team = TEAM, comments = [], eventName = 'issues', depl
     runId: 1,
     serverUrl: 'https://github.com',
   };
+  // The real download() runs; only the network underneath it is fake. The second
+  // attachment answers application/octet-stream, as a storage redirect can.
   const fetched = [];
-  const fetchImage = async url => {
-    fetched.push(url);
-    return { bytes: PNG, ext: fetched.length % 2 ? 'png' : 'jpg' };
+  const fetchStub = async url => {
+    fetched.push(String(url));
+    if (imageStatus !== 200) return new Response('', { status: imageStatus });
+    return String(url) === ATTACHMENT_2
+      ? new Response(JPG, { status: 200, headers: { 'content-type': 'application/octet-stream' } })
+      : new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
   };
-  const args = { github, context, core, root, token: 'test-token', fetchImage };
-  if (eventName === 'workflow_dispatch') args.issueNumber = String(issue.number);
-  else args.issueNumber = '';
-  return { root, calls, core, context, github, fetched, args, read: rel => fs.readFileSync(path.join(root, rel), 'utf8') };
+  return { issue, root, calls, github, context, fetched, fetchStub, eventName, read: rel => fs.readFileSync(path.join(root, rel), 'utf8') };
 }
 
-const post = async (issue, opts) => {
-  const h = harness(issue, opts);
-  const out = await run(h.args);
-  return { ...h, out };
-};
-const reportFor = (h, extra = {}) =>
-  report({ github: h.github, context: h.context, core: h.core, entry: h.core.outputs, defaultBranch: 'main', ...extra });
+/** Runs the "Build entry from issue" step. `h.out` is steps.entry.outputs, as strings. */
+async function build(h, { module } = {}) {
+  // The workflow sets ISSUE_NUMBER on the step from `inputs.issue_number` (empty on issue events).
+  const issueNumber = h.eventName === 'workflow_dispatch' ? String(h.issue.number) : '';
+  const env = { GITHUB_TOKEN: 'test-token', ISSUE_NUMBER: issueNumber };
+  const realFetch = globalThis.fetch;
+  const realNumber = process.env.ISSUE_NUMBER;
+  globalThis.fetch = h.fetchStub;
+  process.env.ISSUE_NUMBER = issueNumber;
+  try {
+    h.entry = await githubScript(BUILD, { github: h.github, context: h.context, env, cwd: h.root, module });
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realNumber === undefined) delete process.env.ISSUE_NUMBER;
+    else process.env.ISSUE_NUMBER = realNumber;
+  }
+  h.out = h.entry.outputs;
+  h.result = h.out[RESULT_KEY] ?? ''; // what `steps.entry.outputs.<key>` evaluates to
+  h.commitRuns = h.result === WRITTEN; // the "Commit and push" step's if:
+  return h;
+}
+const post = (issue, opts) => build(harness(issue, opts));
+
+/** Runs the "Report outcome" step with the env the workflow gives it. */
+async function reportFor(h, { pushStatus = '', entry = h.out } = {}) {
+  const env = { ENTRY: JSON.stringify(entry), PUSH_STATUS: pushStatus, PUSH_LOG: path.join(h.root, 'push.log'), DEFAULT_BRANCH: 'main' };
+  h.report = await githubScript(REPORT, { github: h.github, context: h.context, env, cwd: h.root });
+  return h.report;
+}
 const types = calls => calls.map(c => c.type);
 
 // ── Cases ─────────────────────────────────────────────────────────────
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
 
+test('workflow plumbing: the output the workflow gates on survives github-script', async () => {
+  assert.notEqual(RESULT_KEY, 'result', 'github-script overwrites the `result` output with the script block\'s return value');
+  const used = [...workflow.matchAll(/steps\.entry\.outputs\.(\w+)/g)].map(m => m[1]);
+  assert.ok(!used.includes('result'), 'post-entry.yml reads steps.entry.outputs.result, which belongs to github-script');
+  const h = await post(makeIssue('work-log'));
+  for (const name of used) assert.ok(name in h.out, `post-entry.yml reads steps.entry.outputs.${name}, which the script never sets`);
+  assert.equal(h.result, 'written');
+  assert.equal(h.commitRuns, true, 'the "Commit and push" step must run for a valid entry');
+  assert.deepEqual(h.entry.failures, []);
+});
+
+test('the script logs that it was entered and how it exited', async () => {
+  const h = await post(makeIssue('work-log'));
+  assert.match(h.entry.log[0], /^\[post-entry\] entered/);
+  assert.match(h.entry.log.at(-1), /^\[post-entry\] exit: written/);
+  const rejected = await post(makeIssue('work-log', { user: { login: 'stranger' } }));
+  assert.match(rejected.entry.log.at(-1), /^\[post-entry\] exit: rejected/);
+});
+
+test('a script that returns without a result fails the build step itself', async () => {
+  for (const module of [async () => undefined, async () => ({}), { notAFunction: true }]) {
+    const h = await build(harness(makeIssue('work-log')), { module });
+    assert.equal(h.entry.failures.length, 1, 'the step must fail when no result comes back');
+    assert.equal(h.commitRuns, false);
+  }
+});
+
 test('valid work-log entry is written to the author\'s folder', async () => {
   const h = await post(makeIssue('work-log'));
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.result, 'written');
   assert.equal(h.out.file, 'src/content/work-log/ada-one/2026-09-30-bench-test-of-the-release-latch.md');
   assert.equal(h.out.url, 'https://example-org.github.io/work-log/ada-one/2026-09-30-bench-test-of-the-release-latch/');
   const md = h.read(h.out.file);
@@ -150,14 +278,13 @@ test('valid work-log entry is written to the author\'s folder', async () => {
   assert.match(md, /^timeCommitted: 2\.5$/m);
   assert.match(md, /^# Posted from issue #7 by @ada1$/m);
   assert.match(md, /twenty cycles/);
-  assert.equal(h.core.outputs.result, 'written');
-  assert.equal(h.core.outputs.matched, 'yes');
-  assert.deepEqual(h.core.failures, []);
+  assert.equal(h.out.matched, 'yes');
+  assert.equal(h.out.issue, '7');
 });
 
 test('valid major update is written to updates/ with its image', async () => {
   const h = await post(makeIssue('major-update', { user: { login: 'botwo' } }, { hours: '22' }));
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.result, 'written');
   assert.equal(h.out.file, 'src/content/updates/2026-09-30-bench-test-of-the-release-latch.md');
   const md = h.read(h.out.file);
   assert.doesNotMatch(md, /^author:/m);
@@ -169,57 +296,60 @@ test('valid major update is written to updates/ with its image', async () => {
 
 test('unknown author is rejected, and told who IS on the allowlist', async () => {
   const h = await post(makeIssue('work-log', { user: { login: 'stranger' } }));
-  assert.equal(h.out.result, 'rejected');
+  assert.equal(h.result, 'rejected');
+  assert.equal(h.commitRuns, false);
   assert.match(h.out.message, /@stranger is not on the allowlist/);
   assert.match(h.out.message, /`ada1`, `BoTwo`/);
   assert.match(h.out.message, /No username is set yet for: Cy Three/);
-  assert.equal(h.core.outputs.matched, 'no');
-  await reportFor(h);
+  assert.equal(h.out.matched, 'no');
+  const r = await reportFor(h);
   assert.deepEqual(types(h.calls), ['comment', 'close']);
   assert.equal(h.calls[1].reason, 'not_planned');
-  assert.deepEqual(h.core.failures, []);
+  assert.deepEqual(r.failures, []);
+  assert.match(r.summaryText, /REJECTED/);
 });
 
 test('empty allowlist fails the job loudly instead of rejecting', async () => {
   const h = await post(makeIssue('work-log'), { team: EMPTY_TEAM });
-  assert.equal(h.out.result, 'misconfigured');
-  assert.equal(h.core.failures.length, 1);
-  assert.match(h.core.failures[0], /allowlist has not been filled in/);
-  assert.match(h.core.failures[0], /npm run sync:allowlist/);
-  await reportFor(h);
+  assert.equal(h.result, 'misconfigured');
+  assert.equal(h.entry.failures.length, 1);
+  assert.match(h.entry.failures[0], /allowlist has not been filled in/);
+  assert.match(h.entry.failures[0], /npm run sync:allowlist/);
+  const r = await reportFor(h);
   assert.deepEqual(types(h.calls), ['comment'], 'comments once, does not close the issue');
   assert.match(h.calls[0].body, /not your fault/);
-  assert.match(h.core.summaryText, /NOT CONFIGURED/);
+  assert.match(r.summaryText, /NOT CONFIGURED/);
+  assert.equal(r.failures.length, 1);
 });
 
 test('missing label but correct title prefix still posts', async () => {
   const h = await post(makeIssue('work-log', { labels: [] }, { type: null }));
-  assert.equal(h.core.outputs.via, 'title prefix');
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.out.via, 'title prefix');
+  assert.equal(h.result, 'written');
 });
 
 test('no label and no title prefix: the "Entry type" form field is enough', async () => {
   const h = await post(makeIssue('major-update', { labels: [], title: 'Bench test' }));
-  assert.equal(h.core.outputs.kind, 'major-update');
-  assert.equal(h.core.outputs.via, '"Entry type" form field');
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.out.kind, 'major-update');
+  assert.equal(h.out.via, '"Entry type" form field');
+  assert.equal(h.result, 'written');
 });
 
 test('issue filed before the form had an "Entry type" field posts via its label', async () => {
   const h = await post(makeIssue('work-log', { title: 'Bench test' }, { type: null }));
-  assert.equal(h.core.outputs.via, 'label');
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.out.via, 'label');
+  assert.equal(h.result, 'written');
 });
 
 test('future date is invalid', async () => {
   const h = await post(makeIssue('work-log', {}, { date: '2999-01-01' }));
-  assert.equal(h.out.result, 'invalid');
+  assert.equal(h.result, 'invalid');
   assert.match(h.out.message, /\*\*Date\*\* 2999-01-01 is in the future/);
 });
 
 test('malformed hours value is invalid', async () => {
   const h = await post(makeIssue('work-log', {}, { hours: 'a couple' }));
-  assert.equal(h.out.result, 'invalid');
+  assert.equal(h.result, 'invalid');
   assert.match(h.out.message, /\*\*Time committed\*\* "a couple" must be a positive number/);
 });
 
@@ -232,41 +362,41 @@ test('"2.5 hrs" and "3h" are accepted as hours', async () => {
 
 test('missing required field (empty content) is invalid and writes nothing', async () => {
   const h = await post(makeIssue('work-log', {}, { content: '' }));
-  assert.equal(h.out.result, 'invalid');
+  assert.equal(h.result, 'invalid');
   assert.match(h.out.message, /\*\*Content\*\* is empty/);
   assert.equal(fs.existsSync(path.join(h.root, 'src')), false);
 });
 
 test('several problems are all reported at once', async () => {
   const h = await post(makeIssue('major-update', {}, { title: 'Hey', hours: '-1', images: '' }));
-  assert.equal(h.out.result, 'invalid');
+  assert.equal(h.result, 'invalid');
   assert.equal(h.out.message.split('\n').length, 3);
 });
 
 test('entry with two images saves both and records both', async () => {
   const images = `![Image](${ATTACHMENT})\n<img width="800" alt="Force plot" src="${ATTACHMENT_2}" />`;
   const h = await post(makeIssue('work-log', {}, { images }));
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.result, 'written');
   assert.deepEqual(h.fetched, [ATTACHMENT, ATTACHMENT_2]);
   const dir = path.join(h.root, 'public', 'img', 'work-log');
   assert.deepEqual(fs.readdirSync(dir).sort(), ['2026-09-30-ada-one-i7-1.png', '2026-09-30-ada-one-i7-2.jpg']);
+  assert.deepEqual(fs.readFileSync(path.join(dir, '2026-09-30-ada-one-i7-2.jpg')), JPG);
   const md = h.read(h.out.file);
   assert.match(md, /src: \/img\/work-log\/2026-09-30-ada-one-i7-1\.png\n    alt: "Photo for \\"Bench test of the release latch\\""/);
   assert.match(md, /src: \/img\/work-log\/2026-09-30-ada-one-i7-2\.jpg\n    alt: "Force plot"/);
 });
 
 test('an image that cannot be downloaded is reported, not thrown', async () => {
-  const h = harness(makeIssue('major-update'));
-  h.args.fetchImage = async url => { throw new Error(`could not download ${url} (HTTP 404)`); };
-  const out = await run(h.args);
-  assert.equal(out.result, 'invalid');
-  assert.match(out.message, /\*\*Images\*\*: could not download .* \(HTTP 404\)/);
+  const h = await post(makeIssue('major-update'), { imageStatus: 404 });
+  assert.equal(h.result, 'invalid');
+  assert.match(h.out.message, /\*\*Images\*\*: could not download .* \(HTTP 404\)/);
+  assert.deepEqual(h.fetched, [ATTACHMENT, ATTACHMENT], 'tries without credentials, then once with the token');
 });
 
 test('"### " headings inside the entry are kept, not treated as form fields', async () => {
   const content = 'Tested the latch.\n\n### Next steps\n\nOrder springs.\n\n### Content\n\nMore.\n\n### Images\n\nSee below.';
   const h = await post(makeIssue('work-log', {}, { content, images: `![Rig](${ATTACHMENT})` }));
-  assert.equal(h.out.result, 'written');
+  assert.equal(h.result, 'written');
   const md = h.read(h.out.file);
   assert.match(md, /### Next steps\n\nOrder springs\./);
   assert.match(md, /### Content\n\nMore\./);
@@ -281,39 +411,43 @@ test('ticking yourself as a collaborator is ignored', async () => {
 
 test('an unrelated issue is skipped, visibly', async () => {
   const h = await post({ number: 9, state: 'open', title: 'Site is slow', labels: [], user: { login: 'ada1' }, body: 'It takes ages.' });
-  assert.equal(h.out.result, 'skip');
-  assert.equal(h.core.outputs.kind, 'none');
-  await reportFor(h);
+  assert.equal(h.result, 'skip');
+  assert.equal(h.out.kind, 'none');
+  assert.deepEqual(h.entry.failures, []);
+  const r = await reportFor(h);
   assert.deepEqual(h.calls, []);
-  assert.deepEqual(h.core.failures, []);
-  assert.match(h.core.summaryText, /SKIPPED/);
-  assert.match(h.core.summaryText, /Not a log entry/);
+  assert.deepEqual(r.failures, []);
+  assert.match(r.summaryText, /SKIPPED/);
+  assert.match(r.summaryText, /Not a log entry/);
 });
 
 test('a closed issue is skipped on an issue event, but a manual replay posts it', async () => {
   const closed = makeIssue('work-log', { state: 'closed' });
   const a = await post(closed);
-  assert.equal(a.out.result, 'skip');
+  assert.equal(a.result, 'skip');
   const b = await post(closed, { eventName: 'workflow_dispatch' });
-  assert.equal(b.out.result, 'written');
-  assert.equal(b.core.outputs.trigger, 'workflow_dispatch');
+  assert.equal(b.result, 'written');
+  assert.equal(b.out.trigger, 'workflow_dispatch');
 });
 
 test('an issue that already has a file is not posted twice', async () => {
   const h = await post(makeIssue('work-log'));
-  const again = await run(h.args);
-  assert.equal(again.result, 'duplicate');
-  assert.equal(again.file, h.out.file);
+  const first = h.out.file;
+  await build(h);
+  assert.equal(h.result, 'duplicate');
+  assert.equal(h.out.file, first);
   assert.equal(fs.readdirSync(path.join(h.root, 'src/content/work-log/ada-one')).length, 1);
   await reportFor(h);
   assert.deepEqual(types(h.calls), ['comment', 'close']);
   assert.equal(h.calls[1].reason, 'completed');
 });
 
-test('a crash still sets a result and fails the job', async () => {
+test('a crash still sets a result and fails the build step', async () => {
   const h = await post(makeIssue('work-log'), { apiFails: true });
-  assert.equal(h.core.outputs.result, 'error');
-  assert.match(h.core.failures[0], /crashed/);
+  assert.equal(h.result, 'error');
+  assert.match(h.entry.failures[0], /crashed/);
+  const r = await reportFor(h);
+  assert.match(r.summaryText, /the posting script crashed/);
 });
 
 test('report: written + pushed → starts deploy, comments, closes, writes the summary', async () => {
@@ -323,59 +457,61 @@ test('report: written + pushed → starts deploy, comments, closes, writes the s
   assert.deepEqual(h.calls[0], { type: 'deploy', workflow: 'deploy.yml', ref: 'main' });
   assert.match(h.calls[1].body, /^Posted! It will be live/);
   assert.equal(h.calls[2].reason, 'completed');
-  assert.equal(r.failure, '');
-  assert.deepEqual(h.core.failures, []);
+  assert.deepEqual(r.failures, []);
   for (const want of ['POSTED', '#7', 'work-log (via "Entry type" form field)', '@ada1', 'yes → ada-one', h.out.file, 'pushed', 'started']) {
-    assert.ok(h.core.summaryText.includes(want), `summary should mention ${want}`);
+    assert.ok(r.summaryText.includes(want), `summary should mention ${want}`);
   }
 });
 
 test('report: push rejected by branch protection → explains it on the issue, leaves it open', async () => {
   const h = await post(makeIssue('work-log'));
-  await reportFor(h, { pushStatus: 'protected' });
+  const r = await reportFor(h, { pushStatus: 'protected' });
   assert.deepEqual(types(h.calls), ['comment']);
   assert.match(h.calls[0].body, /branch protection rule or ruleset on `main` rejected the push/);
   assert.match(h.calls[0].body, /\*\*github-actions\*\* as a bypass actor/);
   assert.match(h.calls[0].body, /issue number `7`/);
-  assert.equal(h.core.failures.length, 1);
-  assert.match(h.core.summaryText, /branch protection rejected/);
+  assert.equal(r.failures.length, 1);
+  assert.match(r.summaryText, /branch protection rejected/);
 });
 
 test('report: commit step died without a status → still explained and failed', async () => {
   const h = await post(makeIssue('work-log'));
-  await reportFor(h, { pushStatus: '' });
+  const r = await reportFor(h, { pushStatus: '' });
   assert.deepEqual(types(h.calls), ['comment']);
-  assert.equal(h.core.failures.length, 1);
+  assert.equal(r.failures.length, 1);
 });
 
 test('report: deploy cannot be started → entry kept, issue told, job failed', async () => {
   const h = await post(makeIssue('work-log'), { deployFails: true });
-  await reportFor(h, { pushStatus: 'pushed' });
+  const r = await reportFor(h, { pushStatus: 'pushed' });
   assert.deepEqual(types(h.calls), ['comment', 'close']);
   assert.match(h.calls[0].body, /deploy could not be started automatically/);
-  assert.equal(h.core.failures.length, 1);
+  assert.equal(r.failures.length, 1);
 });
 
 test('report: invalid → comments once, and not again for the same unchanged issue', async () => {
   const issue = makeIssue('work-log', {}, { hours: 'lots' });
   const first = await post(issue);
-  await reportFor(first);
+  const r1 = await reportFor(first);
   assert.deepEqual(types(first.calls), ['comment']);
   assert.match(first.calls[0].body, /Time committed/);
-  assert.equal(first.core.failures.length, 1);
-  assert.match(first.core.summaryText, /Time committed/);
+  assert.equal(r1.failures.length, 1);
+  assert.match(r1.summaryText, /Time committed/);
 
   const second = await post(issue, { comments: [{ body: first.calls[0].body }] });
-  await reportFor(second);
+  const r2 = await reportFor(second);
   assert.deepEqual(second.calls, [], 'same errors are not commented twice');
-  assert.equal(second.core.failures.length, 1);
+  assert.equal(r2.failures.length, 1);
 });
 
 test('report: no result at all → summary says so and the job fails', async () => {
   const h = harness(makeIssue('work-log'));
-  await report({ github: h.github, context: h.context, core: h.core, entry: {} });
-  assert.match(h.core.summaryText, /did not finish/);
-  assert.equal(h.core.failures.length, 1);
+  // What the step's outputs look like when only github-script's own `result` was set.
+  for (const entry of [{}, { result: '' }, { result: 'written' }]) {
+    const r = await reportFor(h, { entry });
+    assert.match(r.summaryText, /did not finish/);
+    assert.equal(r.failures.length, 1);
+  }
 });
 
 test('a hand-written <!-- g27:kind=… --> marker wins over everything else', async () => {

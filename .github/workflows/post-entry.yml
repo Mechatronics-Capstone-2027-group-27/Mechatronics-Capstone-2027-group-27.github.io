@@ -33,27 +33,41 @@ jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0 # the push step rebases onto the latest main
 
+      # The script reports through an output named `entry_result`, NOT `result`:
+      # github-script sets `steps.<id>.outputs.result` itself, to this block's return
+      # value, after the block ends — so an output of ours with that name is overwritten.
+      # The block also fails the step on the spot if the script comes back with nothing.
       - name: Build entry from issue
         id: entry
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           GITHUB_TOKEN: ${{ github.token }} # fallback credential for downloading images attached to the issue
           ISSUE_NUMBER: ${{ inputs.issue_number }} # empty on issue events; the script then uses the event's issue
         with:
+          result-encoding: string
           script: |
             const run = require('./.github/scripts/post-entry.cjs');
-            await run({ github, context, core, root: process.cwd(), token: process.env.GITHUB_TOKEN });
+            if (typeof run !== 'function') {
+              core.setFailed(`post-entry.cjs exported ${typeof run}, not a function.`);
+              return 'error';
+            }
+            const out = await run({ github, context, core, root: process.cwd(), token: process.env.GITHUB_TOKEN });
+            if (!out || !out.entry_result) {
+              core.setFailed('post-entry.cjs returned without setting entry_result.');
+              return 'error';
+            }
+            return out.entry_result;
 
       # Never exits non-zero for a push problem: it records `status` and the report step
       # explains it on the issue, then fails the job.
       - name: Commit and push
         id: push
-        if: steps.entry.outputs.result == 'written'
+        if: steps.entry.outputs.entry_result == 'written'
         env:
           ISSUE: ${{ steps.entry.outputs.issue }}
           FILE: ${{ steps.entry.outputs.file }}
@@ -87,7 +101,7 @@ jobs:
 
       - name: Report outcome
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ENTRY: ${{ toJSON(steps.entry.outputs) }}
           PUSH_STATUS: ${{ steps.push.outputs.status }}
