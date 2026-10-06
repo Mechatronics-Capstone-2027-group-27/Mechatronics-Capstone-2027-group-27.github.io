@@ -53,13 +53,13 @@ export const SITE = {
  * `photo` is relative to src/assets/img/ — replace the file to swap the portrait.
  * `email` is never rendered publicly unless `showEmail` is true (opt-in, §7.5).
  */
-// TODO(Ethan): github usernames, roles, LinkedIn URLs (and emails only if members opt in).
+// TODO(Ethan): roles, LinkedIn URLs (and emails only if members opt in).
 export const MEMBERS = [
-  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'TODO', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ethan-catz.jpg' },
-  { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'TODO', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ian-macpherson.jpg' },
-  { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'TODO', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/david-makarczyk.jpg' },
-  { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'TODO', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/nitya-singh.jpg' },
-  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'TODO', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/matthew-zelenka.jpg' },
+  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'MystyM', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ethan-catz.jpg' },
+  { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'IanJinzoTakeda', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ian-macpherson.jpg' },
+  { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'DavidM2004', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/david-makarczyk.jpg' },
+  { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'sky1515', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/nitya-singh.jpg' },
+  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'MatthewZelenka', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/matthew-zelenka.jpg' },
 ] as const;
 
 /** Front-page section order. Reorder this array to reorder the page. */

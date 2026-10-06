@@ -1,0 +1,36 @@
+# Builds the site on every pull request to main, so a malformed entry is caught before
+# it reaches the live site. `npm run build` is the test suite: content schema errors fail
+# it and name the file.
+#
+# The workflow name "CI" and the job id "build" are what a required status check is
+# selected by ("CI / build") — don't rename either without updating the ruleset.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true # a second push to the same PR replaces the first build
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # Fails if .github/allowlist.json or the issue form's member list is stale relative
+      # to MEMBERS in src/config/site.ts. Fix with `npm run sync:allowlist`.
+      - run: npm run check:allowlist
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:post
