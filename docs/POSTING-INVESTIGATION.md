@@ -12,6 +12,47 @@ bugs that have never had the chance to fire.
 
 ---
 
+## First live test, issue #11 (2026-10-06): the `result` output collision
+
+The first live runs proved the label gate was fixed — the job ran — and then failed in "Report outcome"
+with "the posting script did not finish, so no result was set", on `issues.opened`, `issues.labeled` and a
+manual replay alike.
+
+**Cause.** `post-entry.cjs` reported its outcome with `core.setOutput('result', …)`. `actions/github-script`
+ends every run with its own `core.setOutput('result', <return value of the script block>)`. Our script
+block returned nothing, so the action overwrote `result` with an empty string after our script had set
+it. Every other output (`kind`, `login`, `matched`, `author`) survived, which is why the summary table was
+right and only the result was missing. The "Commit and push" step, gated on `result == 'written'`, never ran.
+
+The script did run and did finish; "Build entry from issue" was green in under a second because that
+is how long the work takes. What was missing was any check at that step that a result came back.
+
+**Fix.**
+- The output is now `entry_result`. The workflow's `if:` and `report()` read that name; nothing reads
+  `result`.
+- The script block checks what `run()` returned and fails the step there and then if it is not a
+  function, or comes back without a result.
+- `post-entry.cjs` logs a line on entry, at each stage, and at every exit (`[post-entry] exit: written`),
+  so a run's log shows the path taken.
+- Actions moved off the Node 20 runtime in `post-entry.yml` and `ci.yml` only: `checkout@v7`,
+  `setup-node@v7`, `github-script@v8`. `deploy.yml` is deliberately unchanged — it was working and is not
+  part of this bug — so it still shows the Node 20 deprecation warning. `github-script` is on v8, not v9, on
+  purpose: v9 is an ESM rewrite whose release notes list breaking changes to `require` inside scripts,
+  and the workflow depends on `require('./.github/scripts/post-entry.cjs')`. v8 already runs on Node 24.
+
+**Why 29 of 29 tests passed while the real thing did nothing.** The old harness called `run()` and
+`report()` directly and read outputs from its own stub, which had no idea that github-script writes
+`result` last. `scripts/test-post-entry.mjs` now extracts the real `script:` blocks from
+`post-entry.yml`, runs them with github-script's calling convention, applies the same closing
+`setOutput('result', …)`, and reads outputs back the way the workflow does. Against the unfixed code
+that harness fails 27 of 32 cases; against the fix it passes 32 of 32. It also asserts that the
+workflow never reads `steps.entry.outputs.result`.
+
+The harness imitates github-script; it does not run the action itself. The collision was checked
+against the action's source (`src/main.ts`, v8), but the next live run is still the proof.
+
+---
+
 ## Status after Prompt 2 (2026-10-06)
 
 Everything below this section is the original investigation, unchanged. This section records what the
