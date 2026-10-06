@@ -1,12 +1,14 @@
 ---
 import Icon from './Icon.astro';
-import { BRAND, NAV } from '../config/site';
+import { BRAND } from '../config/site';
+import { visibleNav } from '../lib/sections';
 
 interface Props {
   /** Transparent over the hero until the page scrolls (home page only). */
   overlay?: boolean;
 }
 const { overlay = false } = Astro.props;
+const NAV = await visibleNav(); // links to hidden sections are left out
 const path = Astro.url.pathname;
 const isCurrent = (href: string) => !href.includes('#') && path.startsWith(href);
 ---

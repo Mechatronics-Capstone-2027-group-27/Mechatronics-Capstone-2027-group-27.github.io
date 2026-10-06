@@ -38,11 +38,9 @@
 }
 .badge--sample { background: var(--accent-hot); color: var(--bg); }
 .badge--inline { position: static; margin-left: var(--s-2); vertical-align: middle; }
-/* Quiet marker on a collaborator's tab: outlined, not filled. */
-.badge--collab { color: var(--text-dim); background: transparent; border: 1px solid var(--line-strong); font-weight: 500; }
+/* Quiet marker — outlined, not filled. "Collaborated" on a card, "Coming soon" on a section not live yet. */
+.badge--quiet { color: var(--text-dim); background: transparent; border: 1px solid var(--line-strong); font-weight: 500; }
 
-.todo { color: var(--text-dim); font-style: italic; }
-.note { margin-top: var(--s-4); color: var(--text-dim); font-size: var(--step--1); }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
 .btn {
@@ -61,6 +59,8 @@
   border-radius: var(--radius);
   transition: background-color var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
 }
+/* Spelled-out address shown beside an email button when JavaScript is off (ContactLink.astro). */
+.mail-fallback { display: block; font-family: var(--font-mono); font-size: var(--step--1); color: var(--text); }
 .btn--primary { background: var(--text); color: var(--bg); }
 .btn--primary:hover { background: var(--accent); }
 .btn--ghost { border-color: var(--line-strong); color: var(--text); }
@@ -177,6 +177,9 @@
   .nav__links { display: flex; gap: var(--s-5); }
   .nav__inner > .nav__toggle { display: none; }
 }
+/* The menu button only works with JavaScript; without it, don't show a button that does
+   nothing. The same links are in the footer on every page. */
+html:not(.js) .nav__inner > .nav__toggle { display: none; }
 
 /* ── Hero ──────────────────────────────────────────────────────────── */
 .hero {
@@ -198,6 +201,8 @@
   object-fit: cover;
   z-index: -2;
 }
+/* No photo yet: the horizon gradient stands in, under the same scrim. */
+.hero--plain { background: var(--grad-horizon); }
 .hero__scrim {
   position: absolute;
   inset: 0;
@@ -414,6 +419,8 @@
 .about__objectives li::marker { color: var(--accent); }
 .about__media img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius); }
 @media (min-width: 900px) { .about { grid-template-columns: 1fr 1fr; gap: var(--s-6); } }
+/* Text only, until the About photo is in. */
+.about--solo { grid-template-columns: 1fr; max-width: var(--measure); }
 
 .diagram { margin-top: var(--s-6); }
 .diagram img { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); }
@@ -439,6 +446,35 @@
 .reach p { color: var(--text-dim); font-size: var(--step--1); }
 .reach .btn { margin-top: auto; }
 .reach__icon { color: var(--accent); }
+.reach__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); width: 100%; }
+.reach__head .badge { margin-left: 0; }
+/* Not live yet: still fully readable, just set back — no fill, no accent, no link. */
+.reach--soon { background: transparent; }
+.reach--soon .reach__icon { color: var(--text-faint); }
+.reach--soon h3 { color: var(--text-dim); }
+.reach .reach__later {
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+/* Who to contact, above the cards. */
+.contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.contact__line { max-width: 48ch; font-size: var(--step-1); line-height: 1.35; color: var(--text-dim); }
+.contact__line strong { font-weight: 600; color: var(--text); }
+.contact .btn { text-transform: none; letter-spacing: 0.02em; }
 
 .logos { margin-top: var(--s-6); text-align: center; }
 .logos__label { margin-bottom: var(--s-4); }
@@ -579,6 +615,18 @@
   border-radius: var(--radius);
   filter: grayscale(0.3);
 }
+/* Stands in for a portrait that hasn't been supplied yet. */
+.member__initials {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+  color: var(--text-dim);
+  background: var(--surface-2);
+  filter: none;
+}
 .member__name { font-size: var(--step-0); letter-spacing: 0.06em; }
 .member__name a { text-decoration: none; }
 .member__name a:hover { text-decoration: underline; }
@@ -605,14 +653,6 @@
   border-bottom: 1px solid var(--line);
 }
 .docs__item .icon { color: var(--text-faint); }
-.docs__soon {
-  margin-left: var(--s-2);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
 
 /* ── Monday embed ──────────────────────────────────────────────────── */
 .embed {

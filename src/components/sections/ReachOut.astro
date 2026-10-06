@@ -1,55 +1,81 @@
 ---
+// Contact section. The person and the address come from SITE.contact; the address
+// only ever reaches the page through ContactLink, which keeps it encoded.
 import Section from '../Section.astro';
 import Icon from '../Icon.astro';
 import ContactLink from '../ContactLink.astro';
-import { SITE } from '../../config/site';
+import StatusBadge from '../StatusBadge.astro';
+import { SITE, SPONSORS, isSet, memberBySlug } from '../../config/site';
 import type { IconName } from '../icons';
 
-const cards: { icon: IconName; title: string; text: string; cta: string; email: string | null }[] = [
+const person = memberBySlug(SITE.contact.person);
+
+// `live: false` cards describe something we can't offer yet: they get the badge, sit
+// back a little, and their call to action is plain text, not a link.
+const cards: { icon: IconName; title: string; text: string; cta: string; live: boolean }[] = [
   {
     icon: 'rocket',
     title: 'Sponsors',
     text: 'Funding, parts, manufacturing time and testing facilities all move this project forward.',
     cta: 'Sponsorship package',
-    email: null, // TODO(Ethan): link to a sponsorship package PDF in public/docs/
+    live: false, // TODO(Ethan): needs a sponsorship package PDF in public/docs/
   },
   {
     icon: 'handshake',
     title: 'Teams & Collaborators',
     text: 'Other capstone teams, clubs and student design teams — we are happy to share notes.',
     cta: 'Get in touch',
-    email: SITE.contact.general,
+    live: false,
   },
   {
     icon: 'graduation-cap',
     title: 'Faculty & Advisors',
     text: 'Professors, technical advisors and reviewers who want to follow or guide the work.',
     cta: 'Contact the team',
-    email: SITE.contact.general,
+    live: true,
   },
 ];
-const logoSlots = [1, 2, 3, 4, 5];
 ---
 <Section id="reach-out" eyebrow="Get involved" title="Reach out" deck="Ways to support, collaborate with, or advise the team.">
+  {person && (
+    <div class="contact reveal">
+      <p class="contact__line">
+        Questions about the project, or want to work with us?{' '}
+        <strong>{person.name}</strong>{isSet(person.role) && <>, {person.role},</>} is your point of contact.
+      </p>
+      <ContactLink email={SITE.contact.general} showAddress>Email {person.name}</ContactLink>
+    </div>
+  )}
+
   <div class="grid grid--3 reveal-group">
     {cards.map(c => (
-      <article class="reach reveal">
-        <Icon name={c.icon} size={28} class="reach__icon" />
+      <article class:list={['reach reveal', { 'reach--soon': !c.live }]}>
+        <div class="reach__head">
+          <Icon name={c.icon} size={28} class="reach__icon" />
+          {!c.live && <StatusBadge />}
+        </div>
         <h3>{c.title}</h3>
         <p>{c.text}</p>
-        <ContactLink email={c.email}>{c.cta}</ContactLink>
+        {c.live
+          ? <ContactLink email={SITE.contact.general}>{c.cta}</ContactLink>
+          : <p class="reach__later">{c.cta}</p>}
       </article>
     ))}
   </div>
 
-  <div class="logos reveal">
-    <p class="eyebrow logos__label">Supported by</p>
-    <ul class="logos__wall" role="list">
-      {logoSlots.map(() => (
-        <li class="logos__slot">
-          <img src="/img/sponsors/your-logo-here.svg" alt="Sponsor logo placeholder: your logo here" width="200" height="100" loading="lazy" decoding="async" />
-        </li>
-      ))}
-    </ul>
-  </div>
+  {SPONSORS.length > 0 && (
+    <div class="logos reveal">
+      <p class="eyebrow logos__label">Supported by</p>
+      <ul class="logos__wall" role="list">
+        {SPONSORS.map(s => {
+          const logo = <img src={s.logo} alt={s.name} width="200" height="100" loading="lazy" decoding="async" />;
+          return (
+            <li class="logos__slot">
+              {s.href ? <a href={s.href} target="_blank" rel="noopener noreferrer">{logo}<span class="sr-only"> (opens in a new tab)</span></a> : logo}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  )}
 </Section>

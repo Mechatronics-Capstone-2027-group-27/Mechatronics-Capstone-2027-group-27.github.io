@@ -48,7 +48,7 @@ const ownPart = viewer ? contributions[viewer] : undefined;
   <div class="card__body">
     <div class="card__dateline">
       <time class="card__date" datetime={isoDate(date)}>{formatDate(date)}</time>
-      {collaborated && <span class="badge badge--inline badge--collab">Collaborated</span>}
+      {collaborated && <span class="badge badge--inline badge--quiet">Collaborated</span>}
     </div>
     <h3 class="card__title">{title}</h3>
     <MetaRow author={author} loggedBy={collaborated} collaborators={collaborators} hoursText={hours.text} hoursLabel={hours.label} />

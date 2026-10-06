@@ -1,20 +1,19 @@
 ---
+// Lists only the deliverables that have a file. With none, the section is left off
+// the page altogether (src/lib/sections.ts) rather than listing things to come.
 import Section from '../Section.astro';
 import Icon from '../Icon.astro';
 import { DOCUMENTS } from '../../config/site';
+
+const posted = DOCUMENTS.filter(d => d.href);
 ---
 <Section id="documentation" eyebrow="Deliverables" title="Documentation" deck="Course deliverables, posted as they are produced.">
   <ul class="docs reveal" role="list">
-    {DOCUMENTS.map(d => (
+    {posted.map(d => (
       <li class="docs__item">
         <Icon name="file-text" size={20} />
-        {d.href ? (
-          <a href={d.href}>{d.label}</a>
-        ) : (
-          <span data-todo="link">{d.label} <span class="docs__soon">Coming soon</span></span>
-        )}
+        <a href={d.href}>{d.label}</a>
       </li>
     ))}
   </ul>
-  <p class="note">Files go in <code>public/docs/</code>; set each <code>href</code> in <code>DOCUMENTS</code> in <code>src/config/site.ts</code>.</p>
 </Section>
