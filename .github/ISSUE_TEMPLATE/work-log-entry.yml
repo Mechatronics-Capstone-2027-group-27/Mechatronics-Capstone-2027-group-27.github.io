@@ -10,6 +10,8 @@ body:
         When you submit, a bot turns this into a page on the site and closes the issue. If something is wrong it comments here instead.
   # Kind marker read by .github/scripts/post-entry.cjs. It has to be a real field:
   # `type: markdown` blocks are shown on the form but never reach the issue body.
+  # Deliberately NOT required: GitHub sometimes shows "None" instead of the default, and a
+  # required field then blocks the post. The bot falls back to the label and the title prefix.
   - type: dropdown
     id: kind
     attributes:
@@ -18,8 +20,6 @@ body:
       options:
         - Work log entry
       default: 0
-    validations:
-      required: true
   - type: input
     id: title
     attributes:

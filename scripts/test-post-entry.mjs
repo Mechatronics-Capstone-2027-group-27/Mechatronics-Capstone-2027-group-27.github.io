@@ -341,6 +341,43 @@ test('issue filed before the form had an "Entry type" field posts via its label'
   assert.equal(h.result, 'written');
 });
 
+test('"Entry type" left on None, blank or missing falls back to the label, then the title prefix', async () => {
+  // "None" is what an optional dropdown submits when nothing is selected; null drops the field.
+  for (const type of ['None', '', null]) {
+    for (const kind of ['work-log', 'major-update']) {
+      const dir = kind === 'work-log' ? 'src/content/work-log/ada-one/' : 'src/content/updates/';
+      const byLabel = await post(makeIssue(kind, { title: 'Bench test' }, { type }));
+      assert.equal(byLabel.out.kind, kind, `type ${JSON.stringify(type)}: label should decide`);
+      assert.equal(byLabel.out.via, 'label');
+      assert.equal(byLabel.result, 'written');
+      assert.ok(byLabel.out.file.startsWith(dir));
+
+      const byTitle = await post(makeIssue(kind, { labels: [] }, { type }));
+      assert.equal(byTitle.out.kind, kind, `type ${JSON.stringify(type)}: title prefix should decide`);
+      assert.equal(byTitle.out.via, 'title prefix');
+      assert.equal(byTitle.result, 'written');
+      assert.ok(byTitle.out.file.startsWith(dir));
+    }
+  }
+  // The other fields are still read correctly when the first one says None.
+  const h = await post(makeIssue('work-log', {}, { type: 'None' }));
+  assert.match(h.read(h.out.file), /^title: "Bench test of the release latch"$/m);
+  // With no signal at all the run says so instead of guessing.
+  const none = await post(makeIssue('work-log', { labels: [], title: 'Bench test' }, { type: 'None' }));
+  assert.equal(none.result, 'skip');
+  assert.match(none.out.message, /Not a log entry/);
+});
+
+test('the "Entry type" field is not required on either form', async () => {
+  for (const file of ['work-log-entry.yml', 'major-update.yml']) {
+    const yml = fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', file), 'utf8').replace(/\r\n/g, '\n');
+    const field = yml.match(/- type: dropdown\n[\s\S]*?(?=\n  - type: )/)?.[0] ?? '';
+    assert.match(field, /label: Entry type/);
+    assert.match(field, /default: 0/);
+    assert.doesNotMatch(field, /required: true/, `${file}: a required Entry type blocks posting when GitHub shows "None"`);
+  }
+});
+
 test('future date is invalid', async () => {
   const h = await post(makeIssue('work-log', {}, { date: '2999-01-01' }));
   assert.equal(h.result, 'invalid');
