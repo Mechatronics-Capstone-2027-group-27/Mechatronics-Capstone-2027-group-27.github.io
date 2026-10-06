@@ -35,7 +35,8 @@ const FIELD_ORDER = {
   'Time committed': 4,
   'Content of progress': 5,
   'Content': 5,
-  'Images': 6,
+  'Your contribution': 6,
+  'Images': 7,
 };
 const LAST_FIELD = 'Images';
 const fieldKey = label => (label === 'Content of progress' ? 'Content' : label);
@@ -299,6 +300,8 @@ module.exports = async function run({
     const hoursRaw = (f['Time committed'] || '').trim().replace(/\s*(hours?|hrs?|h)\.?$/i, '').trim();
     const hours = hoursRaw === '' ? NaN : Number(hoursRaw);
     const content = (f['Content'] || '').trim();
+    // The poster's own line for `contributions` (work log only, optional).
+    const contribution = kind === 'work-log' ? (f['Your contribution'] || '').replace(/\s+/g, ' ').trim() : '';
     const images = extractImages(f['Images']);
 
     if (title.length < 5 || title.length > 120) errors.push('**Title** must be 5–120 characters.');
@@ -307,6 +310,7 @@ module.exports = async function run({
     if (!Number.isFinite(hours) || hours <= 0) errors.push(`**Time committed** "${hoursRaw}" must be a positive number of hours.`);
     else if (kind === 'work-log' && hours > 24) errors.push('**Time committed** must be 24 hours or less for a single entry.');
     if (!content) errors.push('**Content** is empty.');
+    if (contribution.length > 500) errors.push('**Your contribution** must be 500 characters or less — put the detail in the content.');
     if (kind === 'major-update' && images.length === 0) errors.push('**Images**: major updates need at least one image.');
 
     let collaborators = [];
@@ -358,6 +362,7 @@ module.exports = async function run({
     if (kind === 'work-log') {
       fm.push(`author: ${author.slug}`);
       fm.push(`collaborators: [${collaborators.join(', ')}]`);
+      if (contribution) fm.push('contributions:', `  ${author.slug}: ${yamlStr(contribution)}`);
     }
     fm.push(`timeCommitted: ${hours}`);
     if (saved.length) {

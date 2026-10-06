@@ -10,7 +10,8 @@ const entries = await getWorkLog();
 const s = workLogStats(entries);
 const stats = [
   { label: 'Entries', value: String(s.total) },
-  { label: 'Hours logged', value: formatHours(s.hours) },
+  // Every participant's hours added up: a 2 h meeting with 4 people is 8, not 2.
+  { label: 'Person-hours', value: formatHours(s.personHours).replace(/ h$/, '') },
   { label: 'Last 14 days', value: String(s.last14) },
   { label: 'Most recent', value: s.latest ? formatDate(s.latest) : '—' },
 ];
@@ -19,7 +20,7 @@ const stats = [
   <WorkLogView
     current="all"
     title="Work log"
-    lede="Every entry from every team member, newest first. Each card shows the date, author, collaborators and time committed."
+    lede="Every entry from every team member, newest first. Each card shows the date, author, collaborators and time committed. An entry is written once and also appears on each collaborator's tab; person-hours counts every participant's time."
     entries={entries}
   >
     <StatRow stats={stats} />

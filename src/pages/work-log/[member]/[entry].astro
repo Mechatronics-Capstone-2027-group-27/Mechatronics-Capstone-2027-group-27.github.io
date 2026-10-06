@@ -7,14 +7,19 @@ import Gallery from '../../../components/Gallery.astro';
 import Icon from '../../../components/Icon.astro';
 import Eyebrow from '../../../components/Eyebrow.astro';
 import { memberName } from '../../../config/site';
-import { entryHref, entrySlug, getWorkLog, type WorkLogEntry } from '../../../lib/entries';
-import { excerpt } from '../../../lib/format';
+import { entryHref, entrySlug, getWorkLog, hoursDisplay, hoursFor, isParticipant, participants, type WorkLogEntry } from '../../../lib/entries';
+import { excerpt, formatHours } from '../../../lib/format';
+import { renderEmbeddedMarkdown } from '../../../lib/markdown';
 
+// One page per entry, always under its AUTHOR: /work-log/<author>/<entry>/. Collaborators'
+// tabs link here rather than getting a copy, so mapping over entries (not over
+// members × entries) is what keeps routes from being emitted twice.
 export const getStaticPaths = (async () => {
   const all = await getWorkLog();
   return all.map(entry => {
-    // Prev/next within the same member's entries (newest first → "next" is newer).
-    const mine = all.filter(e => e.data.author === entry.data.author);
+    // Prev/next through the author's tab — everything they wrote or collaborated on
+    // (newest first → "next" is newer).
+    const mine = all.filter(e => isParticipant(e, entry.data.author));
     const i = mine.indexOf(entry);
     return {
       params: { member: entry.data.author, entry: entrySlug(entry) },
@@ -26,6 +31,19 @@ export const getStaticPaths = (async () => {
 const { entry, older, newer } = Astro.props as { entry: WorkLogEntry; older?: WorkLogEntry; newer?: WorkLogEntry };
 const { Content } = await render(entry);
 const d = entry.data;
+const hours = hoursDisplay(entry);
+// Per-person breakdown: only when the entry actually says something per person.
+const showPeople = Object.keys(d.contributions).length > 0 || Object.keys(d.hoursByMember).length > 0;
+// Page outline: h1 title → h2 "Who did what" → h3 person → h4+ their own headings.
+const people = await Promise.all(
+  participants(entry).map(async slug => ({
+    slug,
+    name: memberName(slug),
+    role: slug === d.author ? 'Author' : 'Collaborator',
+    hours: formatHours(hoursFor(entry, slug)),
+    contribution: d.contributions[slug] ? await renderEmbeddedMarkdown(d.contributions[slug], 4) : undefined,
+  })),
+);
 ---
 <BaseLayout title={d.title} description={excerpt(entry.body, 160)}>
   <article class="page entry">
@@ -38,7 +56,7 @@ const d = entry.data;
       <header class="entry__head">
         <Eyebrow>Work log entry {d.draft && <span class="badge badge--sample badge--inline">Sample</span>}</Eyebrow>
         <h1 class="entry__title">{d.title}</h1>
-        <MetaRow class="meta--large" date={d.date} author={d.author} collaborators={d.collaborators} hours={d.timeCommitted} />
+        <MetaRow class="meta--large" date={d.date} author={d.author} collaborators={d.collaborators} hoursText={hours.text} hoursLabel={hours.label} />
         {d.tags.length > 0 && (
           <ul class="tags" role="list" aria-label="Tags">
             {d.tags.map(t => <li>{t}</li>)}
@@ -49,7 +67,25 @@ const d = entry.data;
       <div class="prose entry__body">
         <Content />
       </div>
-      <nav class="pager" aria-label="More entries by this member">
+      {showPeople && (
+        <section class="people" aria-labelledby="people-heading">
+          <h2 id="people-heading" class="people__heading">Who did what</h2>
+          <ul class="people__list" role="list">
+            {people.map(p => (
+              <li class="people__item">
+                <div class="people__who">
+                  <h3 class="people__name"><a href={`/work-log/${p.slug}/`}>{p.name}</a></h3>
+                  <span class="people__role">{p.role}</span>
+                  <span class="people__hours"><span class="sr-only">Time committed: </span>{p.hours}</span>
+                </div>
+                {/* The person's own Markdown, rendered; the stored text is untouched. */}
+                {p.contribution && <div class="prose people__text" set:html={p.contribution} />}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <nav class="pager" aria-label={`More entries from ${memberName(d.author)}`}>
         {older ? (
           <a class="pager__link" href={entryHref(older)}>
             <Icon name="chevron-left" size={16} />
