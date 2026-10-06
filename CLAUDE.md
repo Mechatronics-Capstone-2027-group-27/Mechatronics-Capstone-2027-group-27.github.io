@@ -27,6 +27,7 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 - `npm run preview` — serve `dist/`
 - `npm run sync:allowlist` — regenerate `.github/allowlist.json` and the issue form's member checkboxes from `MEMBERS`. Run after any change to `MEMBERS`.
 - `npm run check:allowlist` — CI check that those generated files aren't stale
+- `npm run test:post` — offline dry run of the posting pipeline (`scripts/test-post-entry.mjs`). Run after touching `.github/scripts/post-entry.cjs` or the issue forms.
 
 ## Architecture
 
@@ -45,6 +46,7 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 
 ### Posting
 - Members post through GitHub Issue Forms (`.github/ISSUE_TEMPLATE/`). `.github/workflows/post-entry.yml` runs `.github/scripts/post-entry.cjs`, which checks the issue author against `.github/allowlist.json`, writes the Markdown file and images, then commits as `github-actions[bot]`. It then dispatches `deploy.yml`, because pushes made with `GITHUB_TOKEN` don't trigger workflows.
+- The job is deliberately not gated on labels (a skipped job is invisible). The script works out the entry kind itself, and every run ends by writing what happened to the run summary. An issue can be replayed from Actions → Post log entry → Run workflow.
 - The "Post an update" link is deliberately quiet and unprotected. The allowlist in the Action is the real access control; don't add client-side hiding.
 - Emails are never in the HTML as raw `mailto:`. `ContactLink.astro` stores them encoded and `site.ts` decodes them at runtime. Personal emails only appear if a member's `showEmail` is true.
 

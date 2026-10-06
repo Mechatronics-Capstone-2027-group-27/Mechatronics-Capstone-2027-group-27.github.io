@@ -1,98 +1,105 @@
 # Issue form → Markdown file → commit to main (§7.1).
 # Only people in .github/allowlist.json (generated from src/config/site.ts) can post;
 # everyone else's issue is closed with a polite comment. Uses the built-in GITHUB_TOKEN only.
+#
+# The job runs for EVERY issue event and post-entry.cjs decides what the issue is. It is
+# deliberately not gated on labels: a skipped job leaves no log and no comment. Every run
+# ends with a "Report outcome" step that writes what happened to the run summary.
 name: Post log entry
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, labeled, reopened]
+  workflow_dispatch: # replay an issue without editing it: Actions → Post log entry → Run workflow
+    inputs:
+      issue_number:
+        description: Number of the issue to post (or re-post)
+        required: true
+        type: string
 
 permissions:
   contents: write
   issues: write
   actions: write # to start the deploy workflow — pushes made with GITHUB_TOKEN don't trigger it
 
+# One run at a time PER ISSUE. A repo-wide group would drop posts: GitHub keeps only one
+# pending run per group, so a third post queued behind two others was cancelled. Different
+# issues may now run side by side; the rebase-and-retry in "Commit and push" covers the race.
 concurrency:
-  group: post-entry # one at a time, so two posts never race on the push
+  group: post-entry-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
   post:
-    if: >-
-      github.event.issue.state == 'open' &&
-      (contains(github.event.issue.labels.*.name, 'work-log') ||
-       contains(github.event.issue.labels.*.name, 'major-update'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0 # the push step rebases onto the latest main
 
       - name: Build entry from issue
         id: entry
         uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ github.token }} # used only to download images attached to the issue
+          GITHUB_TOKEN: ${{ github.token }} # fallback credential for downloading images attached to the issue
+          ISSUE_NUMBER: ${{ inputs.issue_number }} # empty on issue events; the script then uses the event's issue
         with:
           script: |
             const run = require('./.github/scripts/post-entry.cjs');
             await run({ github, context, core, root: process.cwd(), token: process.env.GITHUB_TOKEN });
 
-      - name: Not a team member — comment and close
-        if: steps.entry.outputs.result == 'rejected'
-        uses: actions/github-script@v7
-        env:
-          MESSAGE: ${{ steps.entry.outputs.message }}
-        with:
-          script: |
-            const issue_number = context.payload.issue.number;
-            await github.rest.issues.createComment({ ...context.repo, issue_number, body: process.env.MESSAGE });
-            await github.rest.issues.update({ ...context.repo, issue_number, state: 'closed', state_reason: 'not_planned' });
-
-      - name: Invalid entry — explain and leave open
-        if: steps.entry.outputs.result == 'invalid'
-        uses: actions/github-script@v7
-        env:
-          MESSAGE: ${{ steps.entry.outputs.message }}
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              ...context.repo,
-              issue_number: context.payload.issue.number,
-              body: `This entry couldn't be posted yet:\n\n${process.env.MESSAGE}\n\nEdit the issue to fix it — it will be retried automatically.`,
-            });
-            core.setFailed('Entry failed validation; details commented on the issue.');
-
+      # Never exits non-zero for a push problem: it records `status` and the report step
+      # explains it on the issue, then fails the job.
       - name: Commit and push
+        id: push
         if: steps.entry.outputs.result == 'written'
         env:
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ steps.entry.outputs.issue }}
           FILE: ${{ steps.entry.outputs.file }}
+          BRANCH: ${{ github.event.repository.default_branch }}
         run: |
+          log="$RUNNER_TEMP/push.log"
+          : > "$log"
+          finish() { cat "$log"; echo "status=$1" >> "$GITHUB_OUTPUT"; exit 0; }
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/content public/img
+          for p in src/content public/img; do
+            if [ -e "$p" ]; then git add -A -- "$p"; fi
+          done
+          if git diff --cached --quiet; then finish nothing; fi
           git commit -m "Add log entry from #${ISSUE}: ${FILE}"
-          git push
 
-      - name: Start deploy
-        if: steps.entry.outputs.result == 'written'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run deploy.yml --ref "${{ github.event.repository.default_branch }}" --repo "${{ github.repository }}"
+          status=failed
+          for attempt in 1 2; do
+            if ! git pull --rebase origin "$BRANCH" >> "$log" 2>&1; then
+              git rebase --abort >> "$log" 2>&1 || true
+              status=rebase-failed
+              break
+            fi
+            if git push origin "HEAD:$BRANCH" >> "$log" 2>&1; then status=pushed; break; fi
+            if grep -qiE 'GH006|GH013|protected branch|rule violations' "$log"; then status=protected; break; fi
+            if grep -qiE 'returned error: 403|Permission to .* denied' "$log"; then status=denied; break; fi
+            sleep 5
+          done
+          finish "$status"
 
-      - name: Comment with link and close
-        if: steps.entry.outputs.result == 'written'
+      - name: Report outcome
+        if: always()
         uses: actions/github-script@v7
         env:
-          URL: ${{ steps.entry.outputs.url }}
-          FILE: ${{ steps.entry.outputs.file }}
+          ENTRY: ${{ toJSON(steps.entry.outputs) }}
+          PUSH_STATUS: ${{ steps.push.outputs.status }}
+          PUSH_LOG: ${{ runner.temp }}/push.log
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         with:
           script: |
-            const issue_number = context.payload.issue.number;
-            await github.rest.issues.createComment({
-              ...context.repo,
-              issue_number,
-              body: `Posted! It will be live in a couple of minutes at ${process.env.URL}\n\nFile: \`${process.env.FILE}\``,
+            const { report } = require('./.github/scripts/post-entry.cjs');
+            await report({
+              github, context, core,
+              entry: JSON.parse(process.env.ENTRY || '{}') || {},
+              pushStatus: process.env.PUSH_STATUS,
+              pushLogFile: process.env.PUSH_LOG,
+              defaultBranch: process.env.DEFAULT_BRANCH,
             });
-            await github.rest.issues.update({ ...context.repo, issue_number, state: 'closed', state_reason: 'completed' });
