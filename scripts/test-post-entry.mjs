@@ -129,6 +129,7 @@ function formBody(kind, o = {}) {
     collaborators: ['Bo Two'],
     hours: '2.5',
     content: 'Ran the latch through twenty cycles on the bench and logged the release force each time.',
+    contribution: '', // work log only; null leaves the field out, as on issues filed before it existed
     images: kind === 'work-log' ? '' : `![Latch on the bench](${ATTACHMENT})`,
     ...o,
   };
@@ -140,6 +141,7 @@ function formBody(kind, o = {}) {
   }
   parts.push(section('Time committed', v.hours));
   parts.push(section(kind === 'work-log' ? 'Content of progress' : 'Content', v.content));
+  if (kind === 'work-log' && v.contribution !== null) parts.push(section('Your contribution', v.contribution));
   parts.push(section('Images', v.images));
   return parts.join('\n\n');
 }
@@ -376,6 +378,26 @@ test('the "Entry type" field is not required on either form', async () => {
     assert.match(field, /default: 0/);
     assert.doesNotMatch(field, /required: true/, `${file}: a required Entry type blocks posting when GitHub shows "None"`);
   }
+});
+
+test('"Your contribution" becomes the poster\'s own contributions line; blank or missing writes none', async () => {
+  const h = await post(makeIssue('work-log', {}, { contribution: 'Ran the bench test: "twenty" cycles, logged by hand.' }));
+  assert.equal(h.result, 'written');
+  const md = h.read(h.out.file);
+  assert.match(md, /^collaborators: \[bo-two\]\ncontributions:\n  ada-one: "Ran the bench test: \\"twenty\\" cycles, logged by hand\."\ntimeCommitted: 2\.5$/m);
+  assert.match(md, /twenty cycles on the bench/, 'the content field is still read');
+
+  for (const contribution of ['', null]) {
+    const none = await post(makeIssue('work-log', {}, { contribution }));
+    assert.equal(none.result, 'written');
+    assert.doesNotMatch(none.read(none.out.file), /contributions/);
+  }
+  const major = await post(makeIssue('major-update'));
+  assert.doesNotMatch(major.read(major.out.file), /contributions/);
+
+  const long = await post(makeIssue('work-log', {}, { contribution: 'x'.repeat(501) }));
+  assert.equal(long.result, 'invalid');
+  assert.match(long.out.message, /\*\*Your contribution\*\* must be 500 characters or less/);
 });
 
 test('future date is invalid', async () => {

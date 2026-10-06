@@ -8,13 +8,18 @@ import { formatDate, formatHours, isoDate, joinNames } from '../lib/format';
 interface Props {
   date?: Date;
   author?: string;
+  /** Spell out "Logged by <author>" — for a card shown on a collaborator's tab. */
+  loggedBy?: boolean;
   collaborators?: readonly string[];
   hours?: number;
+  /** Pre-formatted hours (e.g. "2 h each"); takes precedence over `hours`. */
+  hoursText?: string;
   hoursLabel?: string;
   class?: string;
 }
-const { date, author, collaborators = [], hours, hoursLabel = 'Time committed', class: cls } = Astro.props;
+const { date, author, loggedBy = false, collaborators = [], hours, hoursText, hoursLabel = 'Time committed', class: cls } = Astro.props;
 const collabNames = collaborators.map(memberName);
+const shownHours = hoursText ?? (hours !== undefined ? formatHours(hours) : undefined);
 ---
 <ul class:list={['meta', cls]} role="list">
   {date && (
@@ -26,7 +31,7 @@ const collabNames = collaborators.map(memberName);
   )}
   {author && (
     <li class="meta__item meta__author">
-      <span class="sr-only">Author:</span>
+      {loggedBy ? <span class="meta__by">Logged by</span> : <span class="sr-only">Author:</span>}
       <span>{memberName(author)}</span>
     </li>
   )}
@@ -36,11 +41,11 @@ const collabNames = collaborators.map(memberName);
       <span>with {joinNames(collabNames)}</span>
     </li>
   )}
-  {hours !== undefined && (
+  {shownHours !== undefined && (
     <li class="meta__item meta__hours">
       <Icon name="clock" size={14} />
       <span class="sr-only">{hoursLabel}:</span>
-      <span>{formatHours(hours)}</span>
+      <span>{shownHours}</span>
     </li>
   )}
 </ul>

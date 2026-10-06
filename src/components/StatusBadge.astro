@@ -1,0 +1,8 @@
+---
+// A quiet "not live yet" marker. One wording everywhere, so change it here.
+interface Props {
+  label?: string;
+}
+const { label = 'Coming soon' } = Astro.props;
+---
+<span class="badge badge--inline badge--quiet">{label}</span>

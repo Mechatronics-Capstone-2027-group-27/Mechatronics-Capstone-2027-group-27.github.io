@@ -64,6 +64,14 @@ body:
       description: Markdown supported. Aim for at least a few sentences — what you did, what you found, what's next.
     validations:
       required: true
+  - type: input
+    id: contribution
+    attributes:
+      label: Your contribution
+      description: Optional. One line on what YOU did, shown under your name. Most useful when you ticked collaborators — the entry also appears on their tabs, and each of them can add their own line later.
+      placeholder: Ran the agenda and took the notes below.
+    validations:
+      required: false
   - type: textarea
     id: images
     attributes:

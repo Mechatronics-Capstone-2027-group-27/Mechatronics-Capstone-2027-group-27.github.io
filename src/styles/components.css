@@ -38,9 +38,9 @@
 }
 .badge--sample { background: var(--accent-hot); color: var(--bg); }
 .badge--inline { position: static; margin-left: var(--s-2); vertical-align: middle; }
+/* Quiet marker — outlined, not filled. "Collaborated" on a card, "Coming soon" on a section not live yet. */
+.badge--quiet { color: var(--text-dim); background: transparent; border: 1px solid var(--line-strong); font-weight: 500; }
 
-.todo { color: var(--text-dim); font-style: italic; }
-.note { margin-top: var(--s-4); color: var(--text-dim); font-size: var(--step--1); }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
 .btn {
@@ -59,6 +59,8 @@
   border-radius: var(--radius);
   transition: background-color var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
 }
+/* Spelled-out address shown beside an email button when JavaScript is off (ContactLink.astro). */
+.mail-fallback { display: block; font-family: var(--font-mono); font-size: var(--step--1); color: var(--text); }
 .btn--primary { background: var(--text); color: var(--bg); }
 .btn--primary:hover { background: var(--accent); }
 .btn--ghost { border-color: var(--line-strong); color: var(--text); }
@@ -175,6 +177,9 @@
   .nav__links { display: flex; gap: var(--s-5); }
   .nav__inner > .nav__toggle { display: none; }
 }
+/* The menu button only works with JavaScript; without it, don't show a button that does
+   nothing. The same links are in the footer on every page. */
+html:not(.js) .nav__inner > .nav__toggle { display: none; }
 
 /* ── Hero ──────────────────────────────────────────────────────────── */
 .hero {
@@ -196,6 +201,8 @@
   object-fit: cover;
   z-index: -2;
 }
+/* No photo yet: the horizon gradient stands in, under the same scrim. */
+.hero--plain { background: var(--grad-horizon); }
 .hero__scrim {
   position: absolute;
   inset: 0;
@@ -348,6 +355,26 @@
   color: var(--text-dim);
 }
 .card__excerpt--2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.card__dateline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1) var(--s-2); }
+.card__dateline .badge { margin-left: 0; }
+/* The viewing member's own contribution to a shared entry. */
+.card__part { padding-left: var(--s-2); border-left: 2px solid var(--line-strong); font-size: var(--step--1); }
+.card__part-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.card__part-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  color: var(--text);
+}
 .card__foot {
   display: flex;
   align-items: center;
@@ -378,6 +405,7 @@
 .meta__item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
 .meta__item .icon { color: var(--text-faint); }
 .meta__author { color: var(--text); font-weight: 600; }
+.meta__by { font-weight: 400; color: var(--text-dim); }
 .meta__date, .meta__hours { font-family: var(--font-mono); letter-spacing: 0.04em; }
 .meta__hours { color: var(--text); }
 .meta--large { font-size: var(--step-0); gap: var(--s-2) var(--s-4); }
@@ -391,6 +419,8 @@
 .about__objectives li::marker { color: var(--accent); }
 .about__media img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius); }
 @media (min-width: 900px) { .about { grid-template-columns: 1fr 1fr; gap: var(--s-6); } }
+/* Text only, until the About photo is in. */
+.about--solo { grid-template-columns: 1fr; max-width: var(--measure); }
 
 .diagram { margin-top: var(--s-6); }
 .diagram img { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); }
@@ -416,6 +446,35 @@
 .reach p { color: var(--text-dim); font-size: var(--step--1); }
 .reach .btn { margin-top: auto; }
 .reach__icon { color: var(--accent); }
+.reach__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); width: 100%; }
+.reach__head .badge { margin-left: 0; }
+/* Not live yet: still fully readable, just set back — no fill, no accent, no link. */
+.reach--soon { background: transparent; }
+.reach--soon .reach__icon { color: var(--text-faint); }
+.reach--soon h3 { color: var(--text-dim); }
+.reach .reach__later {
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+/* Who to contact, above the cards. */
+.contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.contact__line { max-width: 48ch; font-size: var(--step-1); line-height: 1.35; color: var(--text-dim); }
+.contact__line strong { font-weight: 600; color: var(--text); }
+.contact .btn { text-transform: none; letter-spacing: 0.02em; }
 
 .logos { margin-top: var(--s-6); text-align: center; }
 .logos__label { margin-bottom: var(--s-4); }
@@ -556,6 +615,18 @@
   border-radius: var(--radius);
   filter: grayscale(0.3);
 }
+/* Stands in for a portrait that hasn't been supplied yet. */
+.member__initials {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+  color: var(--text-dim);
+  background: var(--surface-2);
+  filter: none;
+}
 .member__name { font-size: var(--step-0); letter-spacing: 0.06em; }
 .member__name a { text-decoration: none; }
 .member__name a:hover { text-decoration: underline; }
@@ -582,28 +653,6 @@
   border-bottom: 1px solid var(--line);
 }
 .docs__item .icon { color: var(--text-faint); }
-.docs__soon {
-  margin-left: var(--s-2);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-/* ── Monday embed ──────────────────────────────────────────────────── */
-.embed {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-.embed__fallback { margin-top: var(--s-3); font-size: var(--step--1); }
-.embed__fallback a { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--text-dim); }
-@media (max-width: 640px) { .embed { aspect-ratio: 3 / 4; } }
 
 /* ── Footer ────────────────────────────────────────────────────────── */
 .footer { padding-block: var(--s-6) var(--s-4); background: var(--surface); border-top: 1px solid var(--line); }
@@ -743,6 +792,31 @@
 .entry__head > * + * { margin-top: var(--s-3); }
 .entry__title { font-size: var(--step-3); max-width: 24ch; }
 .entry__body { margin-top: var(--s-5); }
+
+/* "Who did what" — per-person contributions and hours on a shared entry. */
+.people { max-width: var(--measure); margin-top: var(--s-6); }
+.people__heading { font-size: var(--step-1); letter-spacing: 0.04em; }
+.people__list { display: grid; gap: var(--s-4); margin-top: var(--s-4); padding: 0; list-style: none; }
+.people__item { padding-left: var(--s-3); border-left: 2px solid var(--line-strong); }
+.people__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-3); }
+.people__name { font-size: var(--step-0); font-weight: 600; letter-spacing: 0; }
+.people__name a { color: var(--text); }
+.people__role, .people__hours { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.04em; color: var(--text-dim); }
+.people__role { text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); }
+.people__hours { color: var(--text); }
+/* A person's own Markdown. Their headings arrive demoted to h4–h6, below the person's h3. */
+.people__text { margin-top: var(--s-3); overflow-wrap: anywhere; }
+.people__text > :first-child { margin-top: 0; }
+.people__text h4, .people__text h5, .people__text h6 {
+  margin-top: 1.4em;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.people__text h4 + * { margin-top: 0.5em; }
 .tags { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0; list-style: none; }
 .tags li { padding: 2px var(--s-2); font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); border: 1px solid var(--line); border-radius: var(--radius); }
 

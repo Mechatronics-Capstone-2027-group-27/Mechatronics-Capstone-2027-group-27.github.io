@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Nothing that belongs in `src/config/site.ts` (member names, team number, project name, emails, URLs) may be hardcoded anywhere else.
 - Do not invent project content (specs, results, sponsors, log entries). Use a bracketed `[TODO: …]` placeholder.
 - No third-party analytics, trackers, CDN fonts or scripts. Don't add dependencies without saying why.
+- The monday.com project board is deliberately **not** on the site (decided 2026-10-06: the team does not want it public). The earlier rule to keep the embed — §1.3 and rule 6 of `CLAUDE-CODE-BUILD-PROMPT.md`, and the old "do not drop this" comment in `site.ts` — is retired. Do not restore the section, link to the board, or print its URL. The URL is kept commented out in `src/config/site.ts`; `README.md` says how to bring the section back if the team asks.
 
 ## What this is
 
@@ -35,13 +36,17 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 - `src/content.config.ts` — Zod schemas for the `work-log` and `updates` collections. Astro 7 requires this location; the legacy `src/content/config.ts` is a hard error. The glob loader's `generateId` enforces that a work-log file's folder is a member slug and matches `author`.
 - `src/content/work-log/<member-slug>/YYYY-MM-DD-title.md` and `src/content/updates/YYYY-MM-DD-title.md` — the entries.
 - `src/lib/entries.ts` — always load entries through here (`getWorkLog`, `getUpdates`, …). It applies draft filtering (`draft: true` only shows, with a SAMPLE badge, while `FEATURES.showSampleContent` is on), sorting, the short-body build warning, stats and cadence buckets.
+- **An entry belongs to its author and every collaborator.** It is written once, shows on each participant's tab, and has one page at `/work-log/<author>/<entry>/`. Never test `e.data.author === slug` to ask whose entry it is, and never sum `timeCommitted` directly: use `participants()`, `isParticipant()`, `hoursFor()`, `personHours()`, `memberStats()` and `hoursDisplay()` from `src/lib/entries.ts`. `timeCommitted` is hours per participant; `hoursByMember` overrides it; team totals are person-hours and are labelled so.
+- `@astrojs/markdown-satteri` (used by `src/lib/markdown.ts` to render `contributions`) is pinned to exactly the version `astro` pins, and the two must be bumped together on any Astro upgrade — otherwise npm installs two copies and contributions render with a different engine than entry bodies.
+- **Nothing addressed to the team reaches the page.** No `TODO`, placeholder or how-to text is rendered; that guidance lives in `README.md` (maintenance) and `CONTRIBUTING.md` (posting). An unset config value (`isSet()` false) means the line, link or section that needs it is left out.
+- `src/lib/sections.ts` — `visibleSections()` and `visibleNav()`. A front-page section renders only when its `FEATURES` switch is on **and** it has real content; the nav, footer and hero links ask the same functions, so nothing links to a hidden section. Don't read `NAV` or `FEATURES` directly in a component to decide what to show.
 - `src/lib/timeline.ts` — `getTimelineEvents()`. Reads `src/data/timeline.json` today; phase 2 fills in `parseIcs()` for `src/data/timeline.ics`.
 - `src/pages/` — `/`, `/work-log/` (All + stats + cadence), `/work-log/[member]/`, `/work-log/[member]/[entry]/`, `/updates/`, `/updates/[slug]/`, `404`.
 - `src/components/` — `sections/*` are the front-page sections; `index.astro` renders them in `SECTION_ORDER`. Icons are a Lucide sprite (`icons.ts` + `IconSprite.astro`), no icon dependency.
 - `src/scripts/site.ts` — the only client JS: nav solidify, mobile menu focus trap, scroll reveal, email decode.
 
 ### Images
-- **Site chrome** (hero, hero-mobile, about, band, team portraits, logo, favicon, og) lives in `src/assets/img/` and goes through Astro `<Image>`/`getImage()`. Swap a placeholder by replacing the file with the same name.
+- **Site chrome** (hero, hero-mobile, about, band, team portraits, logo, favicon, og) lives in `src/assets/img/` and goes through Astro `<Image>`/`getImage()`. The files there began as grey generated placeholders, and a placeholder is never shown: swap one by replacing the file with the same name, then set its flag in `IMAGES` (or the member's `photo` in `MEMBERS`) in `src/config/site.ts`. Until then the hero uses the gradient and a member card shows initials.
 - **User-posted photos** live in `public/img/work-log/` and `public/img/updates/` and are referenced by string path in frontmatter. Render them with plain `<img>` + `width`/`height` + `loading="lazy"` + `decoding="async"`.
 
 ### Posting

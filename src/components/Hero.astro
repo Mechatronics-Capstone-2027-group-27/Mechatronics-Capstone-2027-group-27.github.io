@@ -5,34 +5,45 @@
 import { getImage } from 'astro:assets';
 import Button from './Button.astro';
 import Icon from './Icon.astro';
-import { COURSE, PROJECT, TEAM_NUMBER, isSet } from '../config/site';
+import { COURSE, IMAGES, PROJECT, TEAM_NUMBER, isSet } from '../config/site';
+import { visibleSections } from '../lib/sections';
 import heroSrc from '../assets/img/hero.jpg';
 import heroMobileSrc from '../assets/img/hero-mobile.jpg';
 
+// Until the real photo is in (IMAGES.hero), the hero uses the horizon gradient instead.
 const widths = [1280, 1920, 2560].filter(w => w <= heroSrc.width);
 const mobileWidths = [540, 1080].filter(w => w <= heroMobileSrc.width);
-const [desktopWebp, desktopJpg, mobileWebp] = await Promise.all([
-  getImage({ src: heroSrc, widths, format: 'webp', quality: 72 }),
-  getImage({ src: heroSrc, widths, format: 'jpg', quality: 72 }),
-  getImage({ src: heroMobileSrc, widths: mobileWidths, format: 'webp', quality: 72 }),
-]);
+const photo = IMAGES.hero
+  ? await Promise.all([
+      getImage({ src: heroSrc, widths, format: 'webp', quality: 72 }),
+      getImage({ src: heroSrc, widths, format: 'jpg', quality: 72 }),
+      getImage({ src: heroMobileSrc, widths: mobileWidths, format: 'webp', quality: 72 }),
+    ])
+  : undefined;
+
+// Links only to sections that are on the page.
+const sections = await visibleSections();
+const next = sections[sections.indexOf('hero') + 1];
+const hasUpdates = sections.includes('major-updates');
 ---
-<section id="hero" class="hero" aria-labelledby="hero-title">
-  <picture class="hero__bg">
-    <source media="(max-width: 700px)" srcset={mobileWebp.srcSet.attribute} sizes="100vw" type="image/webp" />
-    <source srcset={desktopWebp.srcSet.attribute} sizes="100vw" type="image/webp" />
-    <img
-      src={desktopJpg.src}
-      srcset={desktopJpg.srcSet.attribute}
-      sizes="100vw"
-      width={heroSrc.width}
-      height={heroSrc.height}
-      alt=""
-      loading="eager"
-      fetchpriority="high"
-      decoding="async"
-    />
-  </picture>
+<section id="hero" class:list={['hero', { 'hero--plain': !photo }]} aria-labelledby="hero-title">
+  {photo && (
+    <picture class="hero__bg">
+      <source media="(max-width: 700px)" srcset={photo[2].srcSet.attribute} sizes="100vw" type="image/webp" />
+      <source srcset={photo[0].srcSet.attribute} sizes="100vw" type="image/webp" />
+      <img
+        src={photo[1].src}
+        srcset={photo[1].srcSet.attribute}
+        sizes="100vw"
+        width={heroSrc.width}
+        height={heroSrc.height}
+        alt=""
+        loading="eager"
+        fetchpriority="high"
+        decoding="async"
+      />
+    </picture>
+  )}
   <div class="hero__scrim" aria-hidden="true"></div>
   <div class="container hero__content">
     <p class="eyebrow">Team {TEAM_NUMBER} · {COURSE.institution}</p>
@@ -41,11 +52,13 @@ const [desktopWebp, desktopJpg, mobileWebp] = await Promise.all([
     {isSet(PROJECT.tagline) && <p class="hero__tagline">{PROJECT.tagline}</p>}
     <div class="hero__actions">
       <Button href="/work-log/" icon="arrow-right">View the work log</Button>
-      <Button href="#major-updates" variant="ghost">Latest updates</Button>
+      {hasUpdates && <Button href="#major-updates" variant="ghost">Latest updates</Button>}
     </div>
   </div>
-  <a class="hero__cue" href="#about">
-    <span>Scroll</span>
-    <Icon name="chevron-down" size={18} />
-  </a>
+  {next && (
+    <a class="hero__cue" href={`#${next}`}>
+      <span>Scroll</span>
+      <Icon name="chevron-down" size={18} />
+    </a>
+  )}
 </section>

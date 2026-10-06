@@ -3,22 +3,25 @@ import type { GetStaticPaths } from 'astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import WorkLogView from '../../components/WorkLogView.astro';
 import { MEMBERS, isSet, type Member } from '../../config/site';
-import { getMemberEntries } from '../../lib/entries';
+import { getMemberEntries, memberStats } from '../../lib/entries';
 import { formatHours } from '../../lib/format';
 
 export const getStaticPaths = (() =>
   MEMBERS.map(member => ({ params: { member: member.slug }, props: { member } }))) satisfies GetStaticPaths;
 
 const { member } = Astro.props as { member: Member };
+// Entries this member wrote plus entries they collaborated on.
 const entries = await getMemberEntries(member.slug);
-const hours = entries.reduce((sum, e) => sum + e.data.timeCommitted, 0);
+const s = memberStats(entries, member.slug);
 const role = isSet(member.role) ? `${member.role} · ` : '';
+// No claim about authorship here: each card says who logged it.
+const lede = `${role}${s.total} ${s.total === 1 ? 'entry' : 'entries'} · ${formatHours(s.hours)} logged`;
 ---
-<BaseLayout title={`${member.name} — Work Log`} description={`Work log entries by ${member.name}.`}>
+<BaseLayout title={`${member.name} — Work Log`} description={`Work log entries ${member.name} wrote or collaborated on.`}>
   <WorkLogView
     current={member.slug}
     title={member.name}
-    lede={`${role}${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · ${formatHours(hours)} logged`}
+    lede={lede}
     entries={entries}
   />
 </BaseLayout>

@@ -100,6 +100,12 @@ const workLog = defineCollection({
         .number({ error: 'timeCommitted is required (hours, e.g. 2.5)' })
         .positive()
         .max(24),
+      // What each participant did, keyed by member slug. Optional; shown as written.
+      contributions: z.record(z.string(), z.string().trim().min(1, { error: 'a contribution cannot be empty' })).default({}),
+      // Hours for a participant who spent a different amount than `timeCommitted`.
+      hoursByMember: z
+        .record(z.string(), z.number({ error: 'hours must be a number, e.g. 1.5' }).positive().max(24))
+        .default({}),
       images: z.array(image).default([]),
       tags: z.array(z.string()).default([]),
       draft: z.boolean().default(false),
@@ -110,6 +116,17 @@ const workLog = defineCollection({
       }
       if (new Set(e.collaborators).size !== e.collaborators.length) {
         ctx.addIssue({ code: 'custom', path: ['collaborators'], message: 'collaborators contains duplicates' });
+      }
+      // Per-person fields may only name people who are on this entry.
+      const onEntry = [e.author, ...e.collaborators];
+      for (const field of ['contributions', 'hoursByMember'] as const) {
+        for (const slug of Object.keys(e[field])) {
+          if (onEntry.includes(slug)) continue;
+          const message = MEMBERS.some(m => m.slug === slug)
+            ? `${field} names "${slug}", who is not the author or a collaborator of this entry. Add them to collaborators or remove the line.`
+            : `${field} names "${slug}", who is not a team member. Valid slugs: ${VALID}`;
+          ctx.addIssue({ code: 'custom', path: [field, slug], message });
+        }
       }
     }),
 });

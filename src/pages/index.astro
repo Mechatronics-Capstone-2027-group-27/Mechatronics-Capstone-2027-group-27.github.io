@@ -1,6 +1,7 @@
 ---
 // Front page (§8). Sections render in SECTION_ORDER and respect FEATURES —
-// reorder or switch off sections in src/config/site.ts, not here.
+// reorder or switch off sections in src/config/site.ts, not here. A section that
+// is switched on but has nothing real to show is also left out (src/lib/sections.ts).
 import { Image } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
@@ -10,21 +11,11 @@ import ReachOut from '../components/sections/ReachOut.astro';
 import Timeline from '../components/sections/Timeline.astro';
 import Team from '../components/sections/Team.astro';
 import Documentation from '../components/sections/Documentation.astro';
-import Monday from '../components/sections/Monday.astro';
-import { FEATURES, SECTION_ORDER } from '../config/site';
+import { IMAGES } from '../config/site';
+import { visibleSections } from '../lib/sections';
 import band from '../assets/img/band-1.jpg';
 
-const enabled: Record<(typeof SECTION_ORDER)[number], boolean> = {
-  hero: true,
-  about: true,
-  'major-updates': FEATURES.majorUpdates,
-  'reach-out': FEATURES.reachOut,
-  timeline: FEATURES.timeline,
-  team: FEATURES.team,
-  documentation: FEATURES.documentation,
-  monday: FEATURES.mondayEmbed,
-};
-const sections = SECTION_ORDER.filter(s => enabled[s]);
+const sections = await visibleSections();
 ---
 <BaseLayout overlayNav>
   {sections.map(s => (
@@ -32,16 +23,17 @@ const sections = SECTION_ORDER.filter(s => enabled[s]);
     s === 'about' ? (
       <>
         <About />
-        <div class="band" aria-hidden="true">
-          <Image src={band} alt="" widths={[1280, 1920, 2560]} sizes="100vw" />
-        </div>
+        {IMAGES.band && (
+          <div class="band" aria-hidden="true">
+            <Image src={band} alt="" widths={[1280, 1920, 2560]} sizes="100vw" />
+          </div>
+        )}
       </>
     ) :
     s === 'major-updates' ? <MajorUpdates /> :
     s === 'reach-out' ? <ReachOut /> :
     s === 'timeline' ? <Timeline /> :
     s === 'team' ? <Team /> :
-    s === 'documentation' ? <Documentation /> :
-    s === 'monday' ? <Monday /> : null
+    s === 'documentation' ? <Documentation /> : null
   ))}
 </BaseLayout>

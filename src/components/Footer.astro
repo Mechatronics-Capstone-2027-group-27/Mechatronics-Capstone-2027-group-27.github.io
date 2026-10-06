@@ -1,9 +1,11 @@
 ---
 import Icon from './Icon.astro';
-import { COURSE, NAV, POST_ENTRY_URL, PROJECT, SITE, TEAM_NUMBER } from '../config/site';
+import { COURSE, POST_ENTRY_URL, PROJECT, SITE, TEAM_NUMBER } from '../config/site';
 import { lastUpdated } from '../lib/entries';
 import { formatDate, isoDate } from '../lib/format';
+import { visibleNav } from '../lib/sections';
 
+const NAV = await visibleNav(); // links to hidden sections are left out
 const updated = await lastUpdated();
 ---
 <footer class="footer">

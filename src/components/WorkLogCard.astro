@@ -1,18 +1,28 @@
 ---
 // The core work-log card (§9.4). Date, author, collaborators and hours are all
 // on the card itself so a grader can score Quality without clicking in.
+//
+// An entry appears on every participant's tab but is written by one person. On a
+// collaborator's tab (`viewer` is not the author) the card is marked "Collaborated"
+// and names who logged it, so it can't be mistaken for that member's own writing.
 import Card from './Card.astro';
 import MetaRow from './MetaRow.astro';
 import Icon from './Icon.astro';
-import { entryHref, type WorkLogEntry } from '../lib/entries';
+import { memberName } from '../config/site';
+import { entryHref, hoursDisplay, type WorkLogEntry } from '../lib/entries';
 import { excerpt, formatDate, isoDate } from '../lib/format';
 
 interface Props {
   entry: WorkLogEntry;
+  /** Slug of the member whose tab this card is on; omit on the All tab. */
+  viewer?: string;
 }
-const { entry } = Astro.props;
-const { title, date, author, collaborators, timeCommitted, images, draft } = entry.data;
+const { entry, viewer } = Astro.props;
+const { title, date, author, collaborators, contributions, images, draft } = entry.data;
 const thumb = images[0];
+const collaborated = !!viewer && viewer !== author;
+const hours = hoursDisplay(entry, viewer);
+const ownPart = viewer ? contributions[viewer] : undefined;
 ---
 <Card href={entryHref(entry)} class="wl-card reveal">
   <div class="card__media card__media--4x3">
@@ -36,9 +46,18 @@ const thumb = images[0];
     )}
   </div>
   <div class="card__body">
-    <time class="card__date" datetime={isoDate(date)}>{formatDate(date)}</time>
+    <div class="card__dateline">
+      <time class="card__date" datetime={isoDate(date)}>{formatDate(date)}</time>
+      {collaborated && <span class="badge badge--inline badge--quiet">Collaborated</span>}
+    </div>
     <h3 class="card__title">{title}</h3>
-    <MetaRow author={author} collaborators={collaborators} hours={timeCommitted} />
+    <MetaRow author={author} loggedBy={collaborated} collaborators={collaborators} hoursText={hours.text} hoursLabel={hours.label} />
+    {ownPart && viewer && (
+      <p class="card__part">
+        <span class="card__part-label">{memberName(viewer)}’s part</span>
+        <span class="card__part-text">{excerpt(ownPart)}</span>
+      </p>
+    )}
     <p class="card__excerpt">{excerpt(entry.body)}</p>
   </div>
 </Card>

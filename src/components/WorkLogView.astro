@@ -28,7 +28,7 @@ const all = await getWorkLog();
     <h2 class="sr-only">Entries</h2>
     {entries.length > 0 ? (
       <div class="grid grid--3 reveal-group">
-        {entries.map(e => <WorkLogCard entry={e} />)}
+        {entries.map(e => <WorkLogCard entry={e} viewer={current === 'all' ? undefined : current} />)}
       </div>
     ) : (
       <EmptyState title="No entries yet">

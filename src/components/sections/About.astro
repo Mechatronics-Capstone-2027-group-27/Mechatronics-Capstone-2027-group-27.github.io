@@ -1,30 +1,36 @@
 ---
+// Everything here comes from src/config/site.ts and each part is optional: the
+// summary, the objectives, the photo and the diagram each appear only once they
+// are real. The section itself is left out while it has no text (src/lib/sections.ts).
 import { Image } from 'astro:assets';
 import Section from '../Section.astro';
-import { PROJECT, isSet } from '../../config/site';
+import { IMAGES, PROJECT, isSet } from '../../config/site';
 import aboutImg from '../../assets/img/about.jpg';
 import systemDiagram from '../../assets/img/system-diagram.svg';
 ---
 <Section id="about" eyebrow="Overview" title="About the project" deck={PROJECT.subtitle}>
-  <div class="about">
+  <div class:list={['about', { 'about--solo': !IMAGES.about }]}>
     <div class="about__text reveal">
-      {isSet(PROJECT.summary)
-        ? <p>{PROJECT.summary}</p>
-        : <p class="todo">[TODO: 2–3 sentence project overview — set <code>PROJECT.summary</code> in <code>src/config/site.ts</code>.]</p>}
-      <h3 class="about__sub">Key objectives</h3>
-      <ul class="about__objectives">
-        <li class="todo">[TODO: objective 1 — what the system must achieve]</li>
-        <li class="todo">[TODO: objective 2 — a measurable performance target]</li>
-        <li class="todo">[TODO: objective 3 — a safety or regulatory constraint]</li>
-        <li class="todo">[TODO: objective 4 — a cost, schedule or scope limit]</li>
-      </ul>
+      {isSet(PROJECT.summary) && <p>{PROJECT.summary}</p>}
+      {PROJECT.objectives.length > 0 && (
+        <>
+          <h3 class="about__sub">Key objectives</h3>
+          <ul class="about__objectives">
+            {PROJECT.objectives.map(o => <li>{o}</li>)}
+          </ul>
+        </>
+      )}
     </div>
-    <div class="about__media reveal">
-      <Image src={aboutImg} alt="[Placeholder] Supporting image for the project overview" widths={[600, 900, 1200, 1800]} sizes="(min-width: 900px) 50vw, 100vw" />
-    </div>
+    {IMAGES.about && (
+      <div class="about__media reveal">
+        <Image src={aboutImg} alt="" widths={[600, 900, 1200, 1800]} sizes="(min-width: 900px) 50vw, 100vw" />
+      </div>
+    )}
   </div>
-  <figure class="diagram reveal">
-    <Image src={systemDiagram} alt="[Placeholder] System architecture diagram — to be supplied" />
-    <figcaption>System architecture <span class="todo">[TODO: replace src/assets/img/system-diagram.svg]</span></figcaption>
-  </figure>
+  {IMAGES.systemDiagram && (
+    <figure class="diagram reveal">
+      <Image src={systemDiagram} alt="System architecture diagram" />
+      <figcaption>System architecture</figcaption>
+    </figure>
+  )}
 </Section>

@@ -5,7 +5,8 @@
 // an email or a URL — import it from here instead.
 //
 // Unknowns are marked `TODO(Ethan)` — `grep -rn "TODO(Ethan)" src` lists them.
-// A value of 'TODO' is treated as "not set" by the helpers at the bottom.
+// A value of 'TODO' is treated as "not set" by the helpers at the bottom, and is
+// never printed: whatever needs it is left off the page until it is filled in.
 
 export const TEAM_NUMBER = 27;
 
@@ -27,6 +28,8 @@ export const PROJECT = {
   tagline: 'TODO — one-sentence description of what the system does.',
   // TODO(Ethan): 2–3 sentence overview for the About section.
   summary: 'TODO',
+  // TODO(Ethan): 3–5 key objectives for the About section, one string each. Empty = no list.
+  objectives: [] as readonly string[],
 } as const;
 
 export const SITE = {
@@ -34,12 +37,17 @@ export const SITE = {
   // Org confirmed from the git remote.
   repo: 'https://github.com/Mechatronics-Capstone-2027-group-27/Mechatronics-Capstone-2027-group-27.github.io',
   defaultBranch: 'main',
-  // Carried over from the original index.html — do not drop this.
-  mondayEmbedUrl: 'https://view.monday.com/embed/18430865192-ed103e6932e15b93aa887683ad4e9fef?r=use1',
+  // The monday.com board is deliberately NOT on the site (decided 2026-10-06: we don't
+  // want it public). It is still the team's working tool. This is its embed URL, kept
+  // here because it is not easy to recover — README.md says how to bring the section back.
+  // mondayEmbedUrl: 'https://view.monday.com/embed/18430865192-ed103e6932e15b93aa887683ad4e9fef?r=use1',
   // Contact routing. Rendered obfuscated (§7.5), never as a raw mailto in the HTML source.
   contact: {
-    general: 'TODO', // TODO(Ethan): shared team address
-    sponsorship: 'TODO', // TODO(Ethan): sponsorship address (can be the same as general)
+    // The member who answers enquiries: a slug from MEMBERS. Their name (and role, once
+    // set) is shown beside the address, so it is never typed a second time.
+    person: 'ethan-catz',
+    general: 'eslemudc@uwaterloo.ca',
+    sponsorship: 'eslemudc@uwaterloo.ca', // same person until there is a separate sponsorship contact
   },
 } as const;
 
@@ -50,16 +58,19 @@ export const SITE = {
  * content folder and any `collaborators` references at the same time.
  * `github` is the GitHub username, used by the posting Action's allowlist (§7).
  * After editing `github`, run `npm run sync:allowlist`.
- * `photo` is relative to src/assets/img/ — replace the file to swap the portrait.
+ * `photo` is relative to src/assets/img/. It stays 'TODO' while the file there is
+ * still the grey placeholder, and the card shows the member's initials. Once the real
+ * portrait replaces src/assets/img/team/<slug>.jpg, set it to 'team/<slug>.jpg'.
+ * `role` and `linkedin` are left off the card while they are 'TODO'.
  * `email` is never rendered publicly unless `showEmail` is true (opt-in, §7.5).
  */
-// TODO(Ethan): roles, LinkedIn URLs (and emails only if members opt in).
+// TODO(Ethan): roles, LinkedIn URLs, portraits (and emails only if members opt in).
 export const MEMBERS = [
-  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'MystyM', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ethan-catz.jpg' },
-  { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'IanJinzoTakeda', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ian-macpherson.jpg' },
-  { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'DavidM2004', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/david-makarczyk.jpg' },
-  { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'sky1515', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/nitya-singh.jpg' },
-  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'MatthewZelenka', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/matthew-zelenka.jpg' },
+  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'MystyM', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'IanJinzoTakeda', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'DavidM2004', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'sky1515', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'MatthewZelenka', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
 ] as const;
 
 /** Front-page section order. Reorder this array to reorder the page. */
@@ -71,41 +82,66 @@ export const SECTION_ORDER = [
   'timeline',
   'team',
   'documentation',
-  'monday',
 ] as const;
 
-/** Kill switches for sections that aren't ready to show publicly yet. */
+/**
+ * Switches for sections that aren't ready to show publicly yet. A section appears
+ * only when its switch is on AND it has real content (see src/lib/sections.ts), and
+ * its NAV link comes and goes with it. README.md lists what each one needs.
+ */
 export const FEATURES = {
-  majorUpdates: true,
-  reachOut: true,
-  timeline: true,
+  about: false, // TODO(Ethan): needs PROJECT.summary and/or PROJECT.objectives
+  majorUpdates: true, // shows itself once the first major update is posted
+  reachOut: true, // also needs SITE.contact.general
+  timeline: false, // TODO(Ethan): needs real milestones in src/data/timeline.json
   team: true,
-  documentation: true,
-  mondayEmbed: true,
+  documentation: true, // shows itself once a DOCUMENTS entry has an href
   workLog: true,
   /**
-   * When true, entries with `draft: true` render with a SAMPLE badge instead of being hidden.
-   * TODO(Ethan): set to false before the instructor sees the site.
+   * Development only. When true, entries with `draft: true` render with a SAMPLE badge;
+   * when false they are not published. Keep it false on the live site.
    */
-  showSampleContent: true,
+  showSampleContent: false,
 } as const;
 
+/**
+ * Site photos in src/assets/img/. Each is false while the file is still the grey
+ * generated placeholder (it has its own name and size printed on it), and the page
+ * leaves that image out. Replace the file — same name — then set its flag to true.
+ * Sizes are in README.md. Portraits are per member: see `photo` in MEMBERS.
+ */
+export const IMAGES = {
+  hero: false, // hero.jpg AND hero-mobile.jpg
+  about: false, // about.jpg
+  band: false, // band-1.jpg
+  systemDiagram: false, // system-diagram.svg
+  og: false, // og.jpg — the link-preview card
+} as const;
+
+/** Sponsor logos for the Reach Out section. Files go in public/img/sponsors/. Empty = no "Supported by" row. */
+export const SPONSORS: readonly { name: string; logo: string; href?: string }[] = [];
+
+/** Navigation, in display order. This order is independent of SECTION_ORDER (the front page). */
 export const NAV = [
   { label: 'Overview',  href: '/#about' },
+  { label: 'Work Log',  href: '/work-log/' },
   { label: 'Updates',   href: '/#major-updates' },
   { label: 'Timeline',  href: '/#timeline' },
-  { label: 'Work Log',  href: '/work-log/' },
   { label: 'Team',      href: '/#team' },
   { label: 'Contact',   href: '/#reach-out' },
 ] as const;
 
-/** Deliverables listed in the Documentation section. Put files in public/docs/ and set `href`. */
-export const DOCUMENTS = [
+/**
+ * Deliverables for the Documentation section. Put the file in public/docs/ and set
+ * `href` (e.g. '/docs/project-proposal.pdf'). Only entries with an href are listed,
+ * and the section stays off the page until there is at least one.
+ */
+export const DOCUMENTS: readonly { label: string; href: string }[] = [
   { label: 'Project proposal', href: '' },
   { label: 'Preliminary design review (PDR)', href: '' },
   { label: 'Final design review (FDR)', href: '' },
   { label: 'Final report', href: '' },
-] as const;
+];
 
 export const TIMELINE = {
   /** Phase 2: replace with a parsed .ics. Until then this JSON is the source. */
