@@ -66,7 +66,7 @@ export const SITE = {
  */
 // TODO(Ethan): roles, LinkedIn URLs, portraits (and emails only if members opt in).
 export const MEMBERS = [
-  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'MystyM', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'ethan-catz',      name: 'Ethan Catz',      github: 'MystyM', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/ethan-catz.jpg' },
   { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'IanJinzoTakeda', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
   { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'DavidM2004', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
   { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'sky1515', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
