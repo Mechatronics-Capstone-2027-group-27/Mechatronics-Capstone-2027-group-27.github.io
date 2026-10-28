@@ -15,6 +15,7 @@ draft: false
 
 * [Ethan Catz](https://mechatronics-capstone-2027-group-27.github.io/work-log/ethan-catz/)
   Author · Time committed: 4 h
+
   What I worked on
     * Rewrote the problem statement
     * Built and renamed the objectives and constraints slides, including the constraints continuation slide
@@ -32,6 +33,7 @@ draft: false
 
 * [David Makarczyk](https://mechatronics-capstone-2027-group-27.github.io/work-log/david-makarczyk/)
   Collaborator · Time committed: 5 h
+
   What I worked on
     * Built the first version of the deck: section dividers and the starting needs, objectives, constraints and criteria slides
     * Wrote and revised the prior art section: overview and design constraint slides for US 11,679,900, US 9,944,410 and US 9,302,788
@@ -46,6 +48,7 @@ draft: false
 
 * [Matthew Zelenka](https://mechatronics-capstone-2027-group-27.github.io/work-log/matthew-zelenka/)
   Collaborator · Time committed: 4 h
+
   What I worked on
     * Wrote the opening of the presentation: background and motivation, problem identification and needs assessment
     * Wrote the first version of the problem statement
@@ -57,6 +60,7 @@ draft: false
 
 * [Nitya Singh](https://mechatronics-capstone-2027-group-27.github.io/work-log/nitya-singh/)
   Collaborator · Time committed: 4 h
+
   What I worked on
     * Revised the background, problem identification and needs slides over several passes
     * Worked on the constraints, objectives and criteria slides
@@ -68,6 +72,7 @@ draft: false
 
 * [Ian Macpherson](https://mechatronics-capstone-2027-group-27.github.io/work-log/ian-macpherson/)
   Collaborator · Time committed: 3.5 h
+
   What I worked on
     * Co-built the appendix "Our Approach" build sequence with Ethan and David
     * Made graphical changes and wording refinements throughout the deck
