@@ -12,6 +12,7 @@ draft: false
 
 * [Ethan Catz](https://mechatronics-capstone-2027-group-27.github.io/work-log/ethan-catz/)
   Author · Time committed: 0.7 h
+
   What I worked on
     * Built a workflow to turn recorded team calls into meeting notes
     * Transcription with Whisper large-v3, with speakers labelled by matching voices against a reference clip from each member
@@ -25,6 +26,7 @@ draft: false
 
 * [David Makarczyk](https://mechatronics-capstone-2027-group-27.github.io/work-log/david-makarczyk/)
   Collaborator · Time committed: 0.7 h
+
   What I worked on
     * Reframed the pitch: replace the heavy control box (gyros or thrusters) and its parachute with a glider
     * Laid out the concept elimination logic: a ground rocket fails on cost, a balloon alone fails on altitude, which leaves balloon + rocket
@@ -38,6 +40,7 @@ draft: false
 
 * [Matthew Zelenka](https://mechatronics-capstone-2027-group-27.github.io/work-log/matthew-zelenka/)
   Collaborator · Time committed: 0.7 h
+
   What I worked on
     * Argued for one full matrix, so the ground rocket is scored on every criterion rather than cut early
     * Proposed ETA and ETA consistency as criteria, and split cost and weight into launch system vs payload
@@ -50,6 +53,7 @@ draft: false
 
 * [Nitya Singh](https://mechatronics-capstone-2027-group-27.github.io/work-log/nitya-singh/)
   Collaborator · Time committed: 0.7 h
+
   What I worked on
     * Raised whether to cut down the constraints from the previous presentation
     * Proposed orientation accuracy and response time as ways to measure maneuverability
