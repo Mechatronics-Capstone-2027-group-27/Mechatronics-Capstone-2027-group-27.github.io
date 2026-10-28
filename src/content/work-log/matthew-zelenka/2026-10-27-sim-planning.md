@@ -1,6 +1,6 @@
 ---
-title: "RC Control and Communication Equipment"
-date: 2026-09-28
+title: "Flight Simulation Meeting"
+date: 2026-10-27
 author: matthew-zelenka
 collaborators: [david-makarczyk]
 timeCommitted: 1.0
