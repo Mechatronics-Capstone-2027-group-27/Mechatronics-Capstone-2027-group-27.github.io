@@ -76,7 +76,7 @@ The wrapper is designed around the aerodynamic parameters required by the flight
 - Reynolds number.
 - Mach number.
 
-The primary outputs of interest are the lift coefficient (\(C_l\)) and drag coefficient (\(C_d\)).
+The primary outputs of interest are the lift coefficient (`Cl`) and drag coefficient (`Cd`).
 
 ## Process Communication
 
