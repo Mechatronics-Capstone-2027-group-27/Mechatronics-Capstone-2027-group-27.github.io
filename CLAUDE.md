@@ -5,6 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Rules
 - Never run git commit, push, or create branches. I handle all git myself.
   (Read-only git — `status`, `diff`, `log` — is fine. No `add`, `commit`, `push`, `branch`, `checkout -b`, `merge`, `rebase`.)
+- The same goes for the GitHub CLI: read-only `gh` only. I handle anything that changes the repo, its issues,
+  PRs, workflows or settings.
+  - Fine: `gh run view`, `gh run list`, `gh issue view`, `gh issue list`, `gh pr view`, `gh pr list`, `gh pr diff`,
+    `gh pr checks`, and `gh api` GET requests.
+  - Not allowed: `gh pr create|merge|close|comment|edit|review`, `gh issue create|close|reopen|comment|edit|delete`,
+    `gh workflow run|enable|disable`, `gh run rerun|cancel`, `gh release …`, `gh label …`, `gh repo edit`,
+    `gh secret …`, `gh variable …`, and `gh api` with `-X`/`--method` `POST`, `PATCH`, `PUT` or `DELETE`.
+  - Careful with `gh api`: adding `-f`, `-F`, `--field`, `--raw-field` or `--input` silently switches the
+    method to POST. A read must have none of those (pass query parameters in the URL), or state `-X GET`.
 - Run the site locally with: `npm run dev`
 - Styles live in `src/styles/` (`tokens.css`, `base.css`, `components.css`). No inline `style=` attributes.
 - Nothing that belongs in `src/config/site.ts` (member names, team number, project name, emails, URLs) may be hardcoded anywhere else.
