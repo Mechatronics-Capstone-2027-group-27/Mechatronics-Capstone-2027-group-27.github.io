@@ -46,6 +46,17 @@ body:
   - type: markdown
     attributes:
       value: |
+        ## Media
+  - type: textarea
+    id: images
+    attributes:
+      label: Images
+      description: Drag images into this box to upload them to GitHub, then leave the generated markdown here. Add a short description in the [square brackets] of each — it becomes the alt text.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
         ## Who did what
         **Fill in a box for everyone who worked on this, including yourself.** A blank box means that person wasn't involved: filling in someone's box is what adds them to the entry.
 
@@ -58,13 +69,6 @@ body:
   - type: markdown
     attributes:
       value: "### Ethan Catz"
-  - type: textarea
-    id: contribution-ethan-catz
-    attributes:
-      label: "Ethan Catz — contribution"
-      description: "What Ethan Catz did. Leave blank if they weren't involved. Markdown is fine."
-    validations:
-      required: false
   - type: input
     id: hours-ethan-catz
     attributes:
@@ -73,16 +77,16 @@ body:
       placeholder: "2.5"
     validations:
       required: false
+  - type: textarea
+    id: contribution-ethan-catz
+    attributes:
+      label: "Ethan Catz — contribution"
+      description: "What Ethan Catz did. Leave blank if they weren't involved. Markdown is fine."
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "### Ian Macpherson"
-  - type: textarea
-    id: contribution-ian-macpherson
-    attributes:
-      label: "Ian Macpherson — contribution"
-      description: "What Ian Macpherson did. Leave blank if they weren't involved. Markdown is fine."
-    validations:
-      required: false
   - type: input
     id: hours-ian-macpherson
     attributes:
@@ -91,16 +95,16 @@ body:
       placeholder: "2.5"
     validations:
       required: false
+  - type: textarea
+    id: contribution-ian-macpherson
+    attributes:
+      label: "Ian Macpherson — contribution"
+      description: "What Ian Macpherson did. Leave blank if they weren't involved. Markdown is fine."
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "### David Makarczyk"
-  - type: textarea
-    id: contribution-david-makarczyk
-    attributes:
-      label: "David Makarczyk — contribution"
-      description: "What David Makarczyk did. Leave blank if they weren't involved. Markdown is fine."
-    validations:
-      required: false
   - type: input
     id: hours-david-makarczyk
     attributes:
@@ -109,16 +113,16 @@ body:
       placeholder: "2.5"
     validations:
       required: false
+  - type: textarea
+    id: contribution-david-makarczyk
+    attributes:
+      label: "David Makarczyk — contribution"
+      description: "What David Makarczyk did. Leave blank if they weren't involved. Markdown is fine."
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "### Nitya Singh"
-  - type: textarea
-    id: contribution-nitya-singh
-    attributes:
-      label: "Nitya Singh — contribution"
-      description: "What Nitya Singh did. Leave blank if they weren't involved. Markdown is fine."
-    validations:
-      required: false
   - type: input
     id: hours-nitya-singh
     attributes:
@@ -127,16 +131,16 @@ body:
       placeholder: "2.5"
     validations:
       required: false
+  - type: textarea
+    id: contribution-nitya-singh
+    attributes:
+      label: "Nitya Singh — contribution"
+      description: "What Nitya Singh did. Leave blank if they weren't involved. Markdown is fine."
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "### Matthew Zelenka"
-  - type: textarea
-    id: contribution-matthew-zelenka
-    attributes:
-      label: "Matthew Zelenka — contribution"
-      description: "What Matthew Zelenka did. Leave blank if they weren't involved. Markdown is fine."
-    validations:
-      required: false
   - type: input
     id: hours-matthew-zelenka
     attributes:
@@ -145,11 +149,11 @@ body:
       placeholder: "2.5"
     validations:
       required: false
-  # END members
   - type: textarea
-    id: images
+    id: contribution-matthew-zelenka
     attributes:
-      label: Images
-      description: Drag images into this box to upload them to GitHub, then leave the generated markdown here. Add a short description in the [square brackets] of each — it becomes the alt text.
+      label: "Matthew Zelenka — contribution"
+      description: "What Matthew Zelenka did. Leave blank if they weren't involved. Markdown is fine."
     validations:
       required: false
+  # END members

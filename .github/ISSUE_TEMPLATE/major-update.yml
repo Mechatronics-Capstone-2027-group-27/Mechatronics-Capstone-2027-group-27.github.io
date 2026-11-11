@@ -50,6 +50,10 @@ body:
       description: Markdown supported.
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        ## Media
   - type: textarea
     id: images
     attributes:

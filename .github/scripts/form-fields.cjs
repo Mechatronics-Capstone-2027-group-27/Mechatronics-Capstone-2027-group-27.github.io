@@ -57,11 +57,12 @@ function fieldsFor(layout, members = []) {
     ];
   }
   if (layout !== 'work-log') throw new Error(`Unknown form layout "${layout}"`);
+  // Each person's block reads: heading → hours → contribution.
   const people = members.flatMap(m => {
     const l = memberLabels(m);
-    return [f(`contribution:${m.slug}`, l.contribution, { slug: m.slug }), f(`hours:${m.slug}`, l.hours, { slug: m.slug })];
+    return [f(`hours:${m.slug}`, l.hours, { slug: m.slug }), f(`contribution:${m.slug}`, l.contribution, { slug: m.slug })];
   });
-  return [...head, f('content', LABELS.content), ...people, f('images', LABELS.images)];
+  return [...head, f('content', LABELS.content), f('images', LABELS.images), ...people];
 }
 
 /**
@@ -81,7 +82,7 @@ function normalizeLabel(text) {
     .toLowerCase();
 }
 
-/** One person's block of the work-log form: a heading, what they did, their hours. */
+/** One person's block of the work-log form: a heading, their hours, what they did. */
 function memberFormYaml(member, indent = '  ') {
   const l = memberLabels(member);
   const q = JSON.stringify; // a JSON string is a valid YAML scalar, whatever the name contains
@@ -89,19 +90,19 @@ function memberFormYaml(member, indent = '  ') {
     '- type: markdown',
     '  attributes:',
     `    value: ${q(`### ${member.name}`)}`,
-    '- type: textarea',
-    `  id: contribution-${member.slug}`,
-    '  attributes:',
-    `    label: ${q(l.contribution)}`,
-    `    description: ${q(`What ${member.name} did. Leave blank if they weren't involved. Markdown is fine.`)}`,
-    '  validations:',
-    '    required: false',
     '- type: input',
     `  id: hours-${member.slug}`,
     '  attributes:',
     `    label: ${q(l.hours)}`,
     `    description: ${q(`Hours ${member.name} spent, decimals OK. Blank if they weren't involved.`)}`,
     '    placeholder: "2.5"',
+    '  validations:',
+    '    required: false',
+    '- type: textarea',
+    `  id: contribution-${member.slug}`,
+    '  attributes:',
+    `    label: ${q(l.contribution)}`,
+    `    description: ${q(`What ${member.name} did. Leave blank if they weren't involved. Markdown is fine.`)}`,
     '  validations:',
     '    required: false',
   ];

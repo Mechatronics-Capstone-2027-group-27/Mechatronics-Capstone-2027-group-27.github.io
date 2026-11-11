@@ -182,16 +182,16 @@ function formBody(kind, o = {}) {
   if (v.type !== null) parts.push(section('Entry type', v.type));
   parts.push(section('Title', v.title), section('Date', v.date));
   if (kind === 'work-log') {
-    parts.push(section('Content of progress', v.content));
+    // Form order: content, then Media (Images), then each person's hours and contribution.
+    parts.push(section('Content of progress', v.content), section('Images', v.images));
     for (const m of TEAM) {
       const p = v.people[m.slug] || { c: '', h: '' };
-      if (p.c !== null) parts.push(section(v.label(m, 'contribution'), p.c));
       if (p.h !== null) parts.push(section(v.label(m, 'hours'), p.h));
+      if (p.c !== null) parts.push(section(v.label(m, 'contribution'), p.c));
     }
   } else {
-    parts.push(section('Time committed', v.hours), section('Content', v.content));
+    parts.push(section('Time committed', v.hours), section('Content', v.content), section('Images', v.images));
   }
-  parts.push(section('Images', v.images));
   return parts.join('\n\n');
 }
 
@@ -711,7 +711,7 @@ test('a "### heading" that matches no field is reported in the summary, not drop
 test('a per-person heading for someone not on the team stops the post instead of losing their part', async () => {
   const issue = makeIssue('work-log');
   // A renamed or added member whose block GitHub emits but the allowlist doesn't know.
-  issue.body = issue.body.replace('### Images', '### Zed Six — contribution\n\nDid the CAD.\n\n### Zed Six — hours\n\n3\n\n### Images');
+  issue.body += '\n\n### Zed Six — hours\n\n3\n\n### Zed Six — contribution\n\nDid the CAD.';
   const h = await post(issue);
   assert.equal(h.result, 'invalid');
   assert.match(h.out.message, /\*\*Form\*\*: the section "Zed Six — contribution" does not match any team member/);
@@ -735,6 +735,32 @@ test('"### " headings inside the entry are kept, not treated as form fields', as
   assert.match(h.md.body, /### Content\n\nMore\./);
   assert.match(h.md.body, /### Images\n\nSee below\./);
   assert.equal(h.md.data.images[0].alt, 'Rig');
+});
+
+test('a copy of any field\'s heading typed inside someone\'s text stays text, wherever that field sits', async () => {
+  // Images now comes right after Content, so "### Images" in Content must not cut it short.
+  const content = 'Ran the latch.\n\n### Images\n\nPhotos are below.\n\n### Ada One — hours\n\nnot a field';
+  // A contribution quoting an EARLIER field's heading and a LATER person's heading.
+  const ada = 'Wrote it up.\n\n### Title\n\nstill Ada\'s text\n\n### Bo Two — hours\n\n9';
+  const h = await post(makeIssue('work-log', {}, {
+    content,
+    images: `![Rig](${ATTACHMENT})`,
+    people: people({ 'ada-one': [ada, '2'], 'bo-two': ['Held the latch.', '1.5'], 'ed-five': ['Took notes.\n\n### Images\n\nnone', '1'] }),
+  }));
+  assert.equal(h.result, 'written', h.out.message);
+  assert.equal(h.md.body.trim(), content, 'content kept whole, including its "### Images" and hours-looking lines');
+  assert.equal(h.md.data.images[0].alt, 'Rig', 'the real Images field still read');
+  assert.equal(h.md.data.contributions['ada-one'], ada, 'Ada\'s text kept whole');
+  assert.equal(h.md.data.hoursByMember['bo-two'], 1.5, 'Bo\'s real hours, not the 9 inside Ada\'s text');
+  assert.equal(h.md.data.contributions['ed-five'], 'Took notes.\n\n### Images\n\nnone', 'the last field too');
+  const unmatched = JSON.parse(h.out.headings).filter(x => !x.field).map(x => `${x.heading} @ ${x.inside}`);
+  assert.deepEqual(unmatched, [
+    'Images @ Content of progress',
+    'Ada One — hours @ Content of progress',
+    'Title @ Ada One — contribution',
+    'Bo Two — hours @ Ada One — contribution',
+    'Images @ Ed Five — contribution',
+  ], 'each copy is reported, with the field it was kept in');
 });
 
 // ── YAML safety (Change B) ──

@@ -20,12 +20,12 @@ Every post is also recorded in git with a real timestamp, so backdated entries a
    - **Title**: what you did. Keep the `[Work log]` at the start of the issue title.
    - **Date**: leave it blank for today.
    - **Content of progress**: the task as a whole, in Markdown — what was done, what you found, what's next.
-   - **Who did what**: there is a box for each team member, with their hours under it. **Fill in a box for
+   - **Media → Images**: see "Attaching photos" below.
+   - **Who did what**: each team member has their hours, then a box for what they did. **Fill in a box for
      everyone who worked on this, including yourself** — filling in someone's box is what adds them to the
      entry, and a blank box means they weren't involved. Write that person's own part, not the whole story
      again ("Attended, no specific deliverable" is fine for someone who only sat in), and their hours.
      Your own hours are always required; your own description is optional.
-   - **Images**: see "Attaching photos" below.
 3. Submit. Within a minute or two a bot adds the entry to the site, comments with the link and closes the issue.
    If something's wrong, such as a bad date, or someone's box filled in without their hours (or hours without
    a box), or placeholder text like `[TODO: …]` left in a field, the bot comments with what to fix and leaves
