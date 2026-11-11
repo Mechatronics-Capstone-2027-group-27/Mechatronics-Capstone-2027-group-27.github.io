@@ -8,6 +8,10 @@
 // overwritten. The harness reproduces that, then reads outputs back exactly as the
 // workflow does (`steps.entry.outputs.*` and `toJSON(steps.entry.outputs)`).
 //
+// Every file a test makes the bot write is then read back the way the site build reads
+// it — Astro's own frontmatter parser — and checked against the real content schema
+// (src/content.schemas.ts). A file that would fail the build fails the test.
+//
 // Nothing touches the network or the repo: the GitHub API and `fetch` are stubs and
 // files are written to a temp folder. The team in these tests is made up on purpose —
 // the real one lives in src/config/site.ts.
@@ -15,13 +19,39 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { createRequire, registerHooks } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT_PATH = path.join(repoRoot, '.github', 'scripts', 'post-entry.cjs');
-const { parseForm, detectKind, FIELD_ORDER } = require(SCRIPT_PATH);
+const run = require(SCRIPT_PATH);
+const { parseForm, detectKind, parseHours } = run;
+const { fieldsFor, memberLabels, normalizeLabel } = require(path.join(repoRoot, '.github', 'scripts', 'form-fields.cjs'));
+const { compile, TemplateError } = require(path.join(repoRoot, '.github', 'scripts', 'entry-template.cjs'));
+
+// The site's own code is TypeScript written for Vite: imports without a ".ts" extension,
+// and the virtual "astro:content" module. These hooks let plain Node load it so the
+// tests use the real schema and the real hour arithmetic, not copies of them.
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier === 'astro:content') {
+      return { url: 'data:text/javascript,export const getCollection = async () => [];', shortCircuit: true };
+    }
+    try {
+      return next(specifier, context);
+    } catch (err) {
+      if (specifier.startsWith('.') && context.parentURL?.endsWith('.ts')) return next(`${specifier}.ts`, context);
+      throw err;
+    }
+  },
+});
+const { workLogSchema, updateSchema } = await import(pathToFileURL(path.join(repoRoot, 'src', 'content.schemas.ts')).href);
+const entries = await import(pathToFileURL(path.join(repoRoot, 'src', 'lib', 'entries.ts')).href);
+// The parsers the build itself uses: Astro's frontmatter reader, and js-yaml (which it
+// wraps) for the issue forms. Both come with Astro; neither is a dependency of ours.
+const { parseFrontmatter } = await import('@astrojs/internal-helpers/frontmatter');
+const yaml = (await import('js-yaml')).default;
 
 // ── The workflow, as written ──────────────────────────────────────────
 const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'post-entry.yml'), 'utf8').replace(/\r\n/g, '\n');
@@ -66,11 +96,13 @@ function fakeCore() {
     outputs: {},
     failures: [],
     notices: [],
+    warnings: [],
     log: [],
     summaryText: '',
     setOutput(k, v) { this.outputs[k] = v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v); },
     setFailed(m) { this.failures.push(String(m)); },
     notice(m) { this.notices.push(String(m)); },
+    warning(m) { this.warnings.push(String(m)); },
     info(m) { this.log.push(String(m)); },
   };
   core.summary = {
@@ -110,8 +142,11 @@ const TEAM = [
   { slug: 'ada-one', name: 'Ada One', github: 'ada1' },
   { slug: 'bo-two', name: 'Bo Two', github: 'BoTwo' },
   { slug: 'cy-three', name: 'Cy Three', github: null },
+  { slug: 'di-four', name: 'Di Four', github: 'di4' },
+  { slug: 'ed-five', name: 'Ed Five', github: null },
 ];
 const EMPTY_TEAM = TEAM.map(m => ({ ...m, github: null }));
+const name = slug => TEAM.find(m => m.slug === slug).name;
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const JPG = Buffer.from('ffd8ffe000104a4649460001', 'hex');
@@ -120,28 +155,65 @@ const ATTACHMENT_2 = 'https://github.com/user-attachments/assets/66666666-7777-8
 
 const section = (label, value) => `### ${label}\n\n${value === '' ? '_No response_' : value}`;
 
-/** An issue body exactly as GitHub renders a submitted issue form. */
+/** Per-person boxes for the work-log form: { slug: { c: contribution, h: hours } }. */
+const DEFAULT_PEOPLE = {
+  'ada-one': { c: '', h: '2.5' },
+  'bo-two': { c: 'Held the latch and called out each reading.', h: '2.5' },
+};
+
+/**
+ * An issue body exactly as GitHub renders a submitted issue form: every field's heading,
+ * in form order, "_No response_" for a blank one. Labels come from form-fields.cjs, the
+ * module that also writes the real form (checked against it in a test below).
+ */
 function formBody(kind, o = {}) {
   const v = {
     type: kind === 'work-log' ? 'Work log entry' : 'Major update',
     title: 'Bench test of the release latch',
     date: '2026-09-30',
-    collaborators: ['Bo Two'],
-    hours: '2.5',
+    hours: '2.5', // major update only
     content: 'Ran the latch through twenty cycles on the bench and logged the release force each time.',
-    contribution: '', // work log only; null leaves the field out, as on issues filed before it existed
+    people: DEFAULT_PEOPLE,
     images: kind === 'work-log' ? '' : `![Latch on the bench](${ATTACHMENT})`,
+    label: (m, field) => memberLabels(m)[field], // how a per-person heading is spelled
     ...o,
   };
   const parts = [];
   if (v.type !== null) parts.push(section('Entry type', v.type));
   parts.push(section('Title', v.title), section('Date', v.date));
   if (kind === 'work-log') {
-    parts.push(section('Collaborators', TEAM.map(m => `- [${v.collaborators.includes(m.name) ? 'X' : ' '}] ${m.name}`).join('\n')));
+    parts.push(section('Content of progress', v.content));
+    for (const m of TEAM) {
+      const p = v.people[m.slug] || { c: '', h: '' };
+      if (p.c !== null) parts.push(section(v.label(m, 'contribution'), p.c));
+      if (p.h !== null) parts.push(section(v.label(m, 'hours'), p.h));
+    }
+  } else {
+    parts.push(section('Time committed', v.hours), section('Content', v.content));
   }
-  parts.push(section('Time committed', v.hours));
-  parts.push(section(kind === 'work-log' ? 'Content of progress' : 'Content', v.content));
-  if (kind === 'work-log' && v.contribution !== null) parts.push(section('Your contribution', v.contribution));
+  parts.push(section('Images', v.images));
+  return parts.join('\n\n');
+}
+
+/** The work-log form as it was before per-person boxes (collaborator checkboxes). */
+function legacyBody(o = {}) {
+  const v = {
+    type: 'Work log entry',
+    title: 'Bench test of the release latch',
+    date: '2026-09-30',
+    collaborators: ['Bo Two'],
+    hours: '2.5',
+    content: 'Ran the latch through twenty cycles on the bench and logged the release force each time.',
+    contribution: '',
+    images: '',
+    ...o,
+  };
+  const parts = [];
+  if (v.type !== null) parts.push(section('Entry type', v.type));
+  parts.push(section('Title', v.title), section('Date', v.date));
+  parts.push(section('Collaborators', TEAM.map(m => `- [${v.collaborators.includes(m.name) ? 'X' : ' '}] ${m.name}`).join('\n')));
+  parts.push(section('Time committed', v.hours), section('Content of progress', v.content));
+  if (v.contribution !== null) parts.push(section('Your contribution', v.contribution));
   parts.push(section('Images', v.images));
   return parts.join('\n\n');
 }
@@ -157,6 +229,7 @@ function makeIssue(kind, o = {}, form = {}) {
     ...o,
   };
 }
+const legacyIssue = (o = {}, form = {}) => ({ ...makeIssue('work-log'), body: legacyBody(form), ...o });
 
 /** One fake job: a temp workspace, a fake GitHub API and a fake network. */
 function harness(issue, { team = TEAM, comments = [], eventName = 'issues', deployFails = false, apiFails = false, imageStatus = 200 } = {}) {
@@ -202,7 +275,23 @@ function harness(issue, { team = TEAM, comments = [], eventName = 'issues', depl
       ? new Response(JPG, { status: 200, headers: { 'content-type': 'application/octet-stream' } })
       : new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
   };
-  return { issue, root, calls, github, context, fetched, fetchStub, eventName, read: rel => fs.readFileSync(path.join(root, rel), 'utf8') };
+  return { issue, root, team, calls, github, context, fetched, fetchStub, eventName, read: rel => fs.readFileSync(path.join(root, rel), 'utf8') };
+}
+
+/**
+ * Reads a written entry the way the site build does and checks it against the real
+ * schema. Returns the parsed frontmatter (after the schema's defaults) and the body.
+ */
+function readEntry(h, rel = h.out.file) {
+  const text = h.read(rel);
+  const { frontmatter, rawFrontmatter, content } = parseFrontmatter(text);
+  assert.ok(rawFrontmatter, `${rel}: Astro found no frontmatter in it`);
+  const isLog = rel.includes('/work-log/');
+  const schema = isLog ? workLogSchema(h.team, path.join(h.root, 'public')) : updateSchema(path.join(h.root, 'public'));
+  const checked = schema.safeParse(frontmatter);
+  assert.ok(checked.success, `${rel} fails the content schema:\n${checked.error?.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n')}\n---\n${text}`);
+  if (isLog) assert.equal(rel.split('/').at(-2), checked.data.author, `${rel}: folder and author differ`);
+  return { data: checked.data, raw: frontmatter, body: content, text };
 }
 
 /** Runs the "Build entry from issue" step. `h.out` is steps.entry.outputs, as strings. */
@@ -224,6 +313,8 @@ async function build(h, { module } = {}) {
   h.out = h.entry.outputs;
   h.result = h.out[RESULT_KEY] ?? ''; // what `steps.entry.outputs.<key>` evaluates to
   h.commitRuns = h.result === WRITTEN; // the "Commit and push" step's if:
+  // Every file written by any test must be one the site would build.
+  if (h.result === 'written') h.md = readEntry(h);
   return h;
 }
 const post = (issue, opts) => build(harness(issue, opts));
@@ -235,17 +326,19 @@ async function reportFor(h, { pushStatus = '', entry = h.out } = {}) {
   return h.report;
 }
 const types = calls => calls.map(c => c.type);
+const people = obj => Object.fromEntries(Object.entries(obj).map(([slug, [c, h]]) => [slug, { c, h }]));
 
 // ── Cases ─────────────────────────────────────────────────────────────
 const cases = [];
-const test = (name, fn) => cases.push({ name, fn });
+const test = (title, fn) => cases.push({ name: title, fn });
 
+// ── Workflow plumbing ──
 test('workflow plumbing: the output the workflow gates on survives github-script', async () => {
   assert.notEqual(RESULT_KEY, 'result', 'github-script overwrites the `result` output with the script block\'s return value');
   const used = [...workflow.matchAll(/steps\.entry\.outputs\.(\w+)/g)].map(m => m[1]);
   assert.ok(!used.includes('result'), 'post-entry.yml reads steps.entry.outputs.result, which belongs to github-script');
   const h = await post(makeIssue('work-log'));
-  for (const name of used) assert.ok(name in h.out, `post-entry.yml reads steps.entry.outputs.${name}, which the script never sets`);
+  for (const n of used) assert.ok(n in h.out, `post-entry.yml reads steps.entry.outputs.${n}, which the script never sets`);
   assert.equal(h.result, 'written');
   assert.equal(h.commitRuns, true, 'the "Commit and push" step must run for a valid entry');
   assert.deepEqual(h.entry.failures, []);
@@ -267,12 +360,13 @@ test('a script that returns without a result fails the build step itself', async
   }
 });
 
+// ── Basic posting ──
 test('valid work-log entry is written to the author\'s folder', async () => {
   const h = await post(makeIssue('work-log'));
   assert.equal(h.result, 'written');
   assert.equal(h.out.file, 'src/content/work-log/ada-one/2026-09-30-bench-test-of-the-release-latch.md');
   assert.equal(h.out.url, 'https://example-org.github.io/work-log/ada-one/2026-09-30-bench-test-of-the-release-latch/');
-  const md = h.read(h.out.file);
+  const md = h.md.text;
   assert.match(md, /^title: "Bench test of the release latch"$/m);
   assert.match(md, /^date: 2026-09-30$/m);
   assert.match(md, /^author: ada-one$/m);
@@ -280,20 +374,24 @@ test('valid work-log entry is written to the author\'s folder', async () => {
   assert.match(md, /^timeCommitted: 2\.5$/m);
   assert.match(md, /^# Posted from issue #7 by @ada1$/m);
   assert.match(md, /twenty cycles/);
+  assert.deepEqual(h.md.data.contributions, { 'bo-two': 'Held the latch and called out each reading.' });
+  assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 2.5, 'bo-two': 2.5 });
   assert.equal(h.out.matched, 'yes');
   assert.equal(h.out.issue, '7');
+  assert.equal(h.out.form, 'work-log');
 });
 
 test('valid major update is written to updates/ with its image', async () => {
   const h = await post(makeIssue('major-update', { user: { login: 'botwo' } }, { hours: '22' }));
   assert.equal(h.result, 'written');
   assert.equal(h.out.file, 'src/content/updates/2026-09-30-bench-test-of-the-release-latch.md');
-  const md = h.read(h.out.file);
-  assert.doesNotMatch(md, /^author:/m);
+  const md = h.md.text;
+  assert.doesNotMatch(md, /^(author|collaborators|contributions|hoursByMember):/m);
   assert.match(md, /^timeCommitted: 22$/m);
   assert.match(md, /src: \/img\/updates\/2026-09-30-bench-test-of-the-release-latch-i7-1\.png/);
   assert.match(md, /alt: "Latch on the bench"/);
   assert.deepEqual(h.fetched, [ATTACHMENT]);
+  assert.equal(h.out.form, 'major-update');
 });
 
 test('unknown author is rejected, and told who IS on the allowlist', async () => {
@@ -301,8 +399,8 @@ test('unknown author is rejected, and told who IS on the allowlist', async () =>
   assert.equal(h.result, 'rejected');
   assert.equal(h.commitRuns, false);
   assert.match(h.out.message, /@stranger is not on the allowlist/);
-  assert.match(h.out.message, /`ada1`, `BoTwo`/);
-  assert.match(h.out.message, /No username is set yet for: Cy Three/);
+  assert.match(h.out.message, /`ada1`, `BoTwo`, `di4`/);
+  assert.match(h.out.message, /No username is set yet for: Cy Three, Ed Five/);
   assert.equal(h.out.matched, 'no');
   const r = await reportFor(h);
   assert.deepEqual(types(h.calls), ['comment', 'close']);
@@ -324,6 +422,7 @@ test('empty allowlist fails the job loudly instead of rejecting', async () => {
   assert.equal(r.failures.length, 1);
 });
 
+// ── Kind detection ──
 test('missing label but correct title prefix still posts', async () => {
   const h = await post(makeIssue('work-log', { labels: [] }, { type: null }));
   assert.equal(h.out.via, 'title prefix');
@@ -363,7 +462,7 @@ test('"Entry type" left on None, blank or missing falls back to the label, then 
   }
   // The other fields are still read correctly when the first one says None.
   const h = await post(makeIssue('work-log', {}, { type: 'None' }));
-  assert.match(h.read(h.out.file), /^title: "Bench test of the release latch"$/m);
+  assert.equal(h.md.data.title, 'Bench test of the release latch');
   // With no signal at all the run says so instead of guessing.
   const none = await post(makeIssue('work-log', { labels: [], title: 'Bench test' }, { type: 'None' }));
   assert.equal(none.result, 'skip');
@@ -372,77 +471,373 @@ test('"Entry type" left on None, blank or missing falls back to the label, then 
 
 test('the "Entry type" field is not required on either form', async () => {
   for (const file of ['work-log-entry.yml', 'major-update.yml']) {
-    const yml = fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', file), 'utf8').replace(/\r\n/g, '\n');
-    const field = yml.match(/- type: dropdown\n[\s\S]*?(?=\n  - type: )/)?.[0] ?? '';
-    assert.match(field, /label: Entry type/);
-    assert.match(field, /default: 0/);
-    assert.doesNotMatch(field, /required: true/, `${file}: a required Entry type blocks posting when GitHub shows "None"`);
+    const form = yaml.load(fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', file), 'utf8'));
+    const field = form.body.find(b => b.attributes?.label === 'Entry type');
+    assert.ok(field, `${file}: no Entry type field`);
+    assert.equal(field.attributes.default, 0);
+    assert.notEqual(field.validations?.required, true, `${file}: a required Entry type blocks posting when GitHub shows "None"`);
   }
 });
 
-test('"Your contribution" becomes the poster\'s own contributions line; blank or missing writes none', async () => {
-  const h = await post(makeIssue('work-log', {}, { contribution: 'Ran the bench test: "twenty" cycles, logged by hand.' }));
+test('a hand-written <!-- g27:kind=… --> marker wins over everything else', async () => {
+  const issue = makeIssue('work-log', { labels: [{ name: 'major-update' }], title: 'x' }, { type: null });
+  issue.body = `<!-- g27:kind=work-log -->\n\n${issue.body}`;
+  assert.deepEqual(detectKind(issue), { kind: 'work-log', via: 'body marker' });
+});
+
+// ── Per-person contributions (Change A) ──
+test('all five contribution boxes filled: everyone is a participant', async () => {
+  const p = people({
+    'ada-one': ['Wrote the test plan.', '3'],
+    'bo-two': ['Built the rig.', '3'],
+    'cy-three': ['Ran the logger.', '3'],
+    'di-four': ['Took photos and notes.', '3'],
+    'ed-five': ['Attended, no specific deliverable', '3'],
+  });
+  const h = await post(makeIssue('work-log', {}, { people: p }));
   assert.equal(h.result, 'written');
-  const md = h.read(h.out.file);
-  assert.match(md, /^collaborators: \[bo-two\]\ncontributions:\n  ada-one: "Ran the bench test: \\"twenty\\" cycles, logged by hand\."\ntimeCommitted: 2\.5$/m);
-  assert.match(md, /twenty cycles on the bench/, 'the content field is still read');
+  assert.deepEqual(h.md.data.collaborators, ['bo-two', 'cy-three', 'di-four', 'ed-five'], 'everyone but the author, in team order');
+  assert.deepEqual(Object.keys(h.md.data.contributions), ['ada-one', 'bo-two', 'cy-three', 'di-four', 'ed-five']);
+  assert.equal(h.md.data.contributions['ed-five'], 'Attended, no specific deliverable');
+  assert.equal(Object.keys(h.md.data.hoursByMember).length, 5);
+});
 
-  for (const contribution of ['', null]) {
-    const none = await post(makeIssue('work-log', {}, { contribution }));
-    assert.equal(none.result, 'written');
-    assert.doesNotMatch(none.read(none.out.file), /contributions/);
+test('two boxes filled: the author and one other', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['Wrote it up.', '1'], 'di-four': ['Soldered the board.', '2'] }) }));
+  assert.equal(h.result, 'written');
+  assert.deepEqual(h.md.data.collaborators, ['di-four']);
+  assert.deepEqual(h.md.data.contributions, { 'ada-one': 'Wrote it up.', 'di-four': 'Soldered the board.' });
+  // Posted by Di: Di's lines come first in the file, then the rest of the team in order.
+  const di = await post(makeIssue('work-log', { user: { login: 'di4' } }, { people: people({ 'ada-one': ['Wrote it up.', '1'], 'di-four': ['Soldered the board.', '2'] }) }));
+  assert.equal(di.md.data.author, 'di-four');
+  assert.deepEqual(Object.keys(di.md.data.contributions), ['di-four', 'ada-one']);
+  assert.deepEqual(Object.keys(di.md.data.hoursByMember), ['di-four', 'ada-one']);
+  assert.deepEqual(di.md.data.collaborators, ['ada-one']);
+  assert.equal(di.md.data.timeCommitted, 2);
+  assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 1, 'di-four': 2 });
+  assert.equal(h.md.data.timeCommitted, 1, 'timeCommitted is the author\'s own hours');
+});
+
+test('no boxes filled: the author alone is the participant, from their hours', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '4'] }) }));
+  assert.equal(h.result, 'written');
+  assert.match(h.md.text, /^collaborators: \[\]$/m);
+  assert.doesNotMatch(h.md.text, /contributions/, 'no empty contributions key');
+  assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 4 });
+  assert.equal(h.md.data.timeCommitted, 4);
+});
+
+test('a box with only whitespace, or only "_No response_", counts as blank', async () => {
+  const h = await post(makeIssue('work-log', {}, {
+    people: people({ 'ada-one': ['  \n\t \n', '2'], 'bo-two': ['_No response_', ''], 'cy-three': ['   _No response_  ', ''] }),
+  }));
+  assert.equal(h.result, 'written');
+  assert.deepEqual(h.md.data.collaborators, []);
+  assert.deepEqual(h.md.data.contributions, {});
+});
+
+test('a contribution keeps its Markdown: headings, lists, blank lines, and YAML-looking text', async () => {
+  const text = [
+    '## What I did',
+    '',
+    '- Wired the **servo** harness',
+    '- Logged: 12 readings # not a comment',
+    '',
+    '### Results',
+    '',
+    '1. key: value stays text',
+    '---',
+    '    indented code {{title}}',
+  ].join('\n');
+  const lead = '  Two leading spaces on the first line.\nThen normal.';
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': [text, '2'], 'bo-two': [lead, '1'] }) }));
+  assert.equal(h.result, 'written');
+  assert.equal(h.md.data.contributions['ada-one'], text, 'read back exactly as written');
+  assert.equal(h.md.data.contributions['bo-two'], lead.trim(), 'trimmed like every field, otherwise exact');
+  assert.match(h.md.body, /twenty cycles/, 'the body is untouched by the contribution\'s "---" line');
+});
+
+test('participation is decided by the contribution box, and the poster is always in', async () => {
+  // Bo's hours appear with no contribution: invalid (tested below). Here: Bo's text, no
+  // hours from Cy, and Ada's own box blank — Ada is still the author and a participant.
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'], 'bo-two': ['Did the wiring.', '2'] }) }));
+  assert.equal(h.md.data.author, 'ada-one');
+  assert.deepEqual(entries.participants(h.md), ['ada-one', 'bo-two']);
+});
+
+// ── Per-person hours (Change A2) ──
+test('five people with five different hours: each goes to hoursByMember', async () => {
+  const p = people({ 'ada-one': ['A', '1'], 'bo-two': ['B', '2'], 'cy-three': ['C', '3.25'], 'di-four': ['D', '4'], 'ed-five': ['E', '5.5'] });
+  const h = await post(makeIssue('work-log', {}, { people: p }));
+  assert.equal(h.result, 'written');
+  assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 1, 'bo-two': 2, 'cy-three': 3.25, 'di-four': 4, 'ed-five': 5.5 });
+  assert.equal(h.md.data.timeCommitted, 1);
+});
+
+test('team total is the sum of hoursByMember, not timeCommitted × participants', async () => {
+  const p = people({ 'ada-one': ['A', '1'], 'bo-two': ['B', '2'], 'cy-three': ['C', '3.25'], 'di-four': ['D', '4'], 'ed-five': ['E', '5.5'] });
+  const h = await post(makeIssue('work-log', {}, { people: p }));
+  const e = h.md; // { data } — the shape src/lib/entries.ts reads
+  assert.equal(entries.personHours(e), 15.75);
+  assert.equal(entries.workLogStats([e]).personHours, 15.75);
+  assert.notEqual(entries.personHours(e), e.data.timeCommitted * entries.participants(e).length);
+  for (const [slug, hours] of Object.entries(e.data.hoursByMember)) assert.equal(entries.hoursFor(e, slug), hours);
+  assert.equal(entries.memberStats([e], 'ed-five').hours, 5.5);
+  // And an old-style entry (no hoursByMember) still means hours per participant.
+  const old = { data: { author: 'ada-one', collaborators: ['bo-two', 'cy-three', 'di-four', 'ed-five'], timeCommitted: 2, hoursByMember: {} } };
+  assert.equal(entries.personHours(old), 10, 'the merged 2026-09-29 shape: 2 h × 5 people = 10 person-hours');
+});
+
+test('"2.5", "2.5 h", "2.5 hrs", "2.5 hours" (and "3h") are all accepted as hours', async () => {
+  for (const raw of ['2.5', '2.5 h', '2.5 hrs', '2.5 hours', '2.5h', '2.5 Hours.']) {
+    const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', raw], 'bo-two': ['Helped.', raw] }) }));
+    assert.equal(h.result, 'written', `"${raw}" should be accepted: ${h.out.message}`);
+    assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 2.5, 'bo-two': 2.5 });
+    assert.equal(h.md.data.timeCommitted, 2.5);
   }
-  const major = await post(makeIssue('major-update'));
-  assert.doesNotMatch(major.read(major.out.file), /contributions/);
-
-  const long = await post(makeIssue('work-log', {}, { contribution: 'x'.repeat(501) }));
-  assert.equal(long.result, 'invalid');
-  assert.match(long.out.message, /\*\*Your contribution\*\* must be 500 characters or less/);
+  assert.equal(parseHours('3h').value, 3);
 });
 
-test('future date is invalid', async () => {
-  const h = await post(makeIssue('work-log', {}, { date: '2999-01-01' }));
+test('a filled contribution with blank hours is INVALID and names the person', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'], 'bo-two': ['Built the rig.', ''] }) }));
   assert.equal(h.result, 'invalid');
-  assert.match(h.out.message, /\*\*Date\*\* 2999-01-01 is in the future/);
+  assert.match(h.out.message, /\*\*Bo Two\*\*: the contribution is filled in but the hours are blank/);
+  assert.equal(fs.existsSync(path.join(h.root, 'src')), false, 'nothing written');
 });
 
-test('malformed hours value is invalid', async () => {
-  const h = await post(makeIssue('work-log', {}, { hours: 'a couple' }));
+test('a filled contribution with 0 hours is INVALID and names the person', async () => {
+  for (const zero of ['0', '0 h', '0.0']) {
+    const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'], 'bo-two': ['Built the rig.', zero] }) }));
+    assert.equal(h.result, 'invalid');
+    assert.match(h.out.message, /\*\*Bo Two\*\*: hours "0[^"]*" must be a number more than 0/);
+  }
+});
+
+test('hours filled with a blank contribution is INVALID and names the person', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'], 'di-four': ['', '1.5'] }) }));
   assert.equal(h.result, 'invalid');
-  assert.match(h.out.message, /\*\*Time committed\*\* "a couple" must be a positive number/);
+  assert.match(h.out.message, /\*\*Di Four\*\*: hours are filled in \("1\.5"\) but the contribution box is blank/);
 });
 
-test('"2.5 hrs" and "3h" are accepted as hours', async () => {
-  const a = await post(makeIssue('work-log', {}, { hours: '2.5 hrs' }));
-  assert.match(a.read(a.out.file), /^timeCommitted: 2\.5$/m);
-  const b = await post(makeIssue('work-log', {}, { hours: '3h' }));
-  assert.match(b.read(b.out.file), /^timeCommitted: 3$/m);
+test('placeholder text like "[TODO: …]" in a box is INVALID, names the person, and writes nothing', async () => {
+  for (const text of ["[TODO: Bo's part]", '[todo]', 'Built the rig. [ TODO fill in the rest ]', '[TODO: unfinished bracket']) {
+    const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'], 'bo-two': [text, '1'] }) }));
+    assert.equal(h.result, 'invalid', `${JSON.stringify(text)} should be refused`);
+    assert.match(h.out.message, /\*\*Bo Two\*\*: the contribution still contains placeholder text \("\[/);
+    assert.equal(fs.existsSync(path.join(h.root, 'src')), false, 'nothing written');
+  }
+  // The author's own box, the title, the content and the old form's line are covered too.
+  const own = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['[TODO: mine]', '2'] }) }));
+  assert.match(own.out.message, /\*\*Ada One\*\* \(you\): the contribution still contains placeholder text/);
+  const title = await post(makeIssue('work-log', {}, { title: 'Latch test [TODO: date]' }));
+  assert.match(title.out.message, /\*\*Title\*\* still contains placeholder text \("\[TODO: date\]"\)/);
+  const content = await post(makeIssue('work-log', {}, { content: 'Ran the latch.\n\n[TODO: results]' }));
+  assert.match(content.out.message, /\*\*Content\*\* still contains placeholder text \("\[TODO: results\]"\)/);
+  const major = await post(makeIssue('major-update', {}, { content: '[TODO]' }));
+  assert.match(major.out.message, /\*\*Content\*\* still contains placeholder text/);
+  const legacy = await post(legacyIssue({}, { contribution: '[TODO: my part]' }));
+  assert.match(legacy.out.message, /\*\*Your contribution\*\* still contains placeholder text/);
+  // The before/after demo issue, as typed: refused, with all four people named.
+  const demo = await post(makeIssue('work-log', {}, {
+    people: people({ 'ada-one': ["[TODO: Ada's part]", '1'], 'bo-two': ["[TODO: Bo's part]", '1'], 'cy-three': ["[TODO: Cy's part]", '1'], 'di-four': ["[TODO: Di's part]", '1'] }),
+  }));
+  assert.equal(demo.result, 'invalid');
+  for (const who of ['Ada One', 'Bo Two', 'Cy Three', 'Di Four']) assert.ok(demo.out.message.includes(`**${who}**`), `names ${who}`);
 });
 
-test('missing required field (empty content) is invalid and writes nothing', async () => {
-  const h = await post(makeIssue('work-log', {}, { content: '' }));
-  assert.equal(h.result, 'invalid');
-  assert.match(h.out.message, /\*\*Content\*\* is empty/);
-  assert.equal(fs.existsSync(path.join(h.root, 'src')), false);
+test('the word TODO in ordinary prose is not placeholder text', async () => {
+  const text = 'Went through our TODO list and closed three items (see todo.md). Brackets [like this] are fine.';
+  const h = await post(makeIssue('work-log', {}, { content: text, people: people({ 'ada-one': ['Cleared the TODO backlog.', '2'] }) }));
+  assert.equal(h.result, 'written', h.out.message);
+  assert.equal(h.md.data.contributions['ada-one'], 'Cleared the TODO backlog.');
+});
+
+test('the author\'s own hours are required; nonsense and > 24 hours are invalid', async () => {
+  const blank = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['Wrote it.', ''] }) }));
+  assert.equal(blank.result, 'invalid');
+  assert.match(blank.out.message, /\*\*Ada One\*\* \(you\): your own hours are required/);
+  const words = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', 'a couple'] }) }));
+  assert.match(words.out.message, /hours "a couple" must be a number more than 0/);
+  const long = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '25'] }) }));
+  assert.match(long.out.message, /hours must be 24 or less/);
 });
 
 test('several problems are all reported at once', async () => {
-  const h = await post(makeIssue('major-update', {}, { title: 'Hey', hours: '-1', images: '' }));
+  const h = await post(makeIssue('work-log', {}, {
+    title: 'Hey',
+    people: people({ 'ada-one': ['', ''], 'bo-two': ['Built it.', ''], 'cy-three': ['', '2'] }),
+  }));
   assert.equal(h.result, 'invalid');
-  assert.equal(h.out.message.split('\n').length, 3);
+  assert.equal(h.out.message.split('\n').length, 4);
+  for (const who of ['Title', 'Ada One', 'Bo Two', 'Cy Three']) assert.ok(h.out.message.includes(who), `should mention ${who}`);
+  const major = await post(makeIssue('major-update', {}, { title: 'Hey', hours: '-1', images: '' }));
+  assert.equal(major.out.message.split('\n').length, 3);
 });
 
+// ── Robustness: headings ──
+test('per-person headings are found whatever GitHub does to case, spaces, dashes and punctuation', async () => {
+  const nbsp = String.fromCharCode(0xa0);
+  const variants = [
+    (m, f) => `${m.name} – ${f}`, // en dash
+    (m, f) => `${m.name} - ${f}:`, // hyphen, trailing colon
+    (m, f) => `${m.name.toUpperCase()}${String.fromCharCode(0x2014)}${f.toUpperCase()}`, // no spaces, caps
+    (m, f) => `${m.name.replace(' ', nbsp)} ${String.fromCharCode(0x2014)} ${f}${nbsp}`, // non-breaking spaces
+    (m, f) => `  ${m.name}   ${String.fromCharCode(0x2014)}   ${f} .`, // extra spaces, trailing dot
+  ];
+  for (const label of variants) {
+    const h = await post(makeIssue('work-log', {}, { label, people: people({ 'ada-one': ['Mine.', '2'], 'bo-two': ['Theirs.', '1'] }) }));
+    assert.equal(h.result, 'written', `${label(TEAM[1], 'hours')}: ${h.out.message}`);
+    assert.deepEqual(h.md.data.contributions, { 'ada-one': 'Mine.', 'bo-two': 'Theirs.' });
+    assert.deepEqual(h.md.data.hoursByMember, { 'ada-one': 2, 'bo-two': 1 });
+    assert.deepEqual(JSON.parse(h.out.headings).filter(x => !x.field), [], 'every heading matched');
+  }
+});
+
+test('a "### heading" that matches no field is reported in the summary, not dropped', async () => {
+  const content = 'Tested the latch.\n\n### Next steps\n\nOrder springs.';
+  const h = await post(makeIssue('work-log', {}, { content }));
+  assert.equal(h.result, 'written');
+  assert.match(h.md.body, /### Next steps\n\nOrder springs\./, 'kept in the text');
+  const found = JSON.parse(h.out.headings);
+  assert.deepEqual(found.filter(x => !x.field), [{ heading: 'Next steps', field: null, inside: 'Content of progress' }]);
+  assert.ok(found.some(x => x.field === 'Bo Two — hours'), 'matched headings are listed too');
+  assert.ok(h.entry.warnings.some(w => w.includes('"### Next steps" matched no form field')), 'and annotated on the run');
+  const r = await reportFor(h, { pushStatus: 'pushed' });
+  assert.match(r.summaryText, /#### Form headings \(work-log form\)/);
+  assert.match(r.summaryText, /\| `### Next steps` \| ⚠️ \*\*matched no form field\*\* — kept as text inside "Content of progress" \|/);
+  assert.match(r.summaryText, /\| `### Title` \| Title \|/);
+});
+
+test('a per-person heading for someone not on the team stops the post instead of losing their part', async () => {
+  const issue = makeIssue('work-log');
+  // A renamed or added member whose block GitHub emits but the allowlist doesn't know.
+  issue.body = issue.body.replace('### Images', '### Zed Six — contribution\n\nDid the CAD.\n\n### Zed Six — hours\n\n3\n\n### Images');
+  const h = await post(issue);
+  assert.equal(h.result, 'invalid');
+  assert.match(h.out.message, /\*\*Form\*\*: the section "Zed Six — contribution" does not match any team member/);
+  const r = await reportFor(h);
+  assert.match(r.summaryText, /`### Zed Six — hours` \| ⚠️ \*\*matched no form field\*\*/);
+});
+
+test('form fields missing from the issue are listed in the summary', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: { ...DEFAULT_PEOPLE, 'cy-three': { c: '', h: null } } }));
+  assert.equal(h.result, 'written');
+  assert.equal(h.out.missing, 'Cy Three — hours');
+  const r = await reportFor(h, { pushStatus: 'pushed' });
+  assert.match(r.summaryText, /Form fields not found in the issue:\*\* Cy Three — hours/);
+});
+
+test('"### " headings inside the entry are kept, not treated as form fields', async () => {
+  const content = 'Tested the latch.\n\n### Next steps\n\nOrder springs.\n\n### Content\n\nMore.\n\n### Images\n\nSee below.';
+  const h = await post(makeIssue('work-log', {}, { content, images: `![Rig](${ATTACHMENT})` }));
+  assert.equal(h.result, 'written');
+  assert.match(h.md.body, /### Next steps\n\nOrder springs\./);
+  assert.match(h.md.body, /### Content\n\nMore\./);
+  assert.match(h.md.body, /### Images\n\nSee below\./);
+  assert.equal(h.md.data.images[0].alt, 'Rig');
+});
+
+// ── YAML safety (Change B) ──
+test('adversarial titles cannot break the file: colon, quote, leading dash, #, emoji, newline, digits', async () => {
+  const titles = [
+    'Re: latch test: round 2',
+    'The "quick" fix, and \'single\' quotes',
+    '- leading dash title',
+    '#3 and # mid-title',
+    'Launch day 🚀🎈 (balloon)',
+    '12345',
+    'false',
+    'null ~ yes',
+    'Line one\nline two',
+    'Back\\slash and {{title}} and $& here',
+  ];
+  for (const title of titles) {
+    const h = await post(makeIssue('work-log', {}, { title }));
+    assert.equal(h.result, 'written', `${JSON.stringify(title)}: ${h.out.message}`);
+    assert.equal(h.md.data.title, title, `${JSON.stringify(title)} must read back as the same string`);
+    assert.equal(typeof h.md.raw.title, 'string');
+  }
+  const long = await post(makeIssue('work-log', {}, { title: 'x'.repeat(200) }));
+  assert.equal(long.result, 'invalid');
+  assert.match(long.out.message, /\*\*Title\*\* must be 5–120 characters/);
+});
+
+test('optional fields that are absent leave no empty key and no stray blank line', async () => {
+  const h = await post(makeIssue('work-log', {}, { people: people({ 'ada-one': ['', '2'] }) }));
+  const fm = h.md.text.split('\n---\n')[0];
+  assert.doesNotMatch(fm, /^(contributions|images):/m);
+  assert.doesNotMatch(fm, /\n\n/, 'no blank line inside the frontmatter');
+  assert.doesNotMatch(h.md.text, /[ \t]$/m, 'no trailing spaces anywhere');
+  assert.doesNotMatch(h.md.text, /\{\{|\}\}/, 'no template syntax left over');
+  assert.match(h.md.text, /^---\ntitle: /, 'the file starts with its frontmatter');
+  assert.match(h.md.text, /\ndraft: false\n---\n\nRan the latch/, 'one blank line, then the body');
+});
+
+test('a placeholder the script does not know fails the run, naming it', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g27-tpl-'));
+  const real = fs.readFileSync(path.join(repoRoot, '.github', 'templates', 'work-log-entry.md'), 'utf8');
+  fs.writeFileSync(path.join(dir, 'work-log-entry.md'), real.replace('draft: false', 'draft: false\nmood: {{mood}}'));
+  const module = Object.assign(args => run({ ...args, templatesDir: dir }), run);
+  const h = await build(harness(makeIssue('work-log')), { module });
+  assert.equal(h.result, 'misconfigured');
+  assert.match(h.out.message, /unknown placeholder \{\{mood\}\}/);
+  assert.match(h.entry.failures[0], /\{\{mood\}\}/);
+  assert.equal(fs.existsSync(path.join(h.root, 'public')), false, 'checked before anything is downloaded or written');
+  const r = await reportFor(h);
+  assert.match(h.calls[0].body, /not your fault/);
+  assert.equal(r.failures.length, 1);
+});
+
+test('a template that loses the "# Posted from issue" line fails rather than risk double posts', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g27-tpl-'));
+  const real = fs.readFileSync(path.join(repoRoot, '.github', 'templates', 'work-log-entry.md'), 'utf8');
+  fs.writeFileSync(path.join(dir, 'work-log-entry.md'), real.replace(/^# Posted from.*$/m, ''));
+  const module = Object.assign(args => run({ ...args, templatesDir: dir }), run);
+  const h = await build(harness(makeIssue('work-log')), { module });
+  assert.equal(h.result, 'misconfigured');
+  assert.match(h.out.message, /no longer writes the "# Posted from issue/);
+  assert.equal(fs.existsSync(path.join(h.root, 'src')), false);
+});
+
+test('template mistakes are caught when it is read, each with a clear message', async () => {
+  const cases2 = [
+    ['---\ntitle: {{title}}\n', /no closing "---"/],
+    ['title: {{title}}\n---\n---\n', /must start with a "---" line/],
+    ['---\ntitle: {{ nope }}\n---\n', /unknown placeholder \{\{nope\}\}/],
+    ['---\ntitle: {title}}\n---\n', /"\{\{" or "\}\}" that is not a placeholder/],
+    ['---\ncontent: {{content}}\n---\n', /is the entry body and cannot go inside the frontmatter/],
+    ['---\n---\n{{title}}\n', /must go between the two "---" lines/],
+    ['---\n  images: {{images}}\n---\n', /must be alone as the value of a top-level key/],
+  ];
+  for (const [text, want] of cases2) {
+    assert.throws(() => compile(text, 't.md'), err => err instanceof TemplateError && want.test(err.message), `${JSON.stringify(text)} should fail with ${want}`);
+  }
+  // Comments, including ones that mention placeholders, vanish without a trace.
+  const render = compile('{{!-- header {{title}} --}}\n\n---\n{{! note }}\ntitle: {{title}} {{! inline }}\n{{! two\n\nline note }}\n---\n\n{{content}}\n');
+  assert.equal(render({ title: 'T: x', content: 'Body' }), '---\ntitle: "T: x"\n---\n\nBody\n');
+  assert.throws(() => compile('---\ntitle: {{title}}\n---\n')({}), /required placeholder \{\{title\}\} has no value/);
+});
+
+test('both real templates read well-formed and use only known placeholders', async () => {
+  for (const file of ['work-log-entry.md', 'major-update.md']) {
+    const text = fs.readFileSync(path.join(repoRoot, '.github', 'templates', file), 'utf8');
+    assert.doesNotThrow(() => compile(text, file));
+    assert.match(text, /^# Posted from issue #\{\{issue\}\} by @\{\{login\}\}$/m, `${file} must keep the "# Posted from" line`);
+  }
+});
+
+// ── Images ──
 test('entry with two images saves both and records both', async () => {
   const images = `![Image](${ATTACHMENT})\n<img width="800" alt="Force plot" src="${ATTACHMENT_2}" />`;
-  const h = await post(makeIssue('work-log', {}, { images }));
+  const h = await harness(makeIssue('work-log', {}, { images }));
+  await build(h);
   assert.equal(h.result, 'written');
   assert.deepEqual(h.fetched, [ATTACHMENT, ATTACHMENT_2]);
   const dir = path.join(h.root, 'public', 'img', 'work-log');
   assert.deepEqual(fs.readdirSync(dir).sort(), ['2026-09-30-ada-one-i7-1.png', '2026-09-30-ada-one-i7-2.jpg']);
   assert.deepEqual(fs.readFileSync(path.join(dir, '2026-09-30-ada-one-i7-2.jpg')), JPG);
-  const md = h.read(h.out.file);
-  assert.match(md, /src: \/img\/work-log\/2026-09-30-ada-one-i7-1\.png\n    alt: "Photo for \\"Bench test of the release latch\\""/);
-  assert.match(md, /src: \/img\/work-log\/2026-09-30-ada-one-i7-2\.jpg\n    alt: "Force plot"/);
+  assert.match(h.md.text, /src: \/img\/work-log\/2026-09-30-ada-one-i7-1\.png\n    alt: "Photo for \\"Bench test of the release latch\\""/);
+  assert.match(h.md.text, /src: \/img\/work-log\/2026-09-30-ada-one-i7-2\.jpg\n    alt: "Force plot"/);
 });
 
 test('an image that cannot be downloaded is reported, not thrown', async () => {
@@ -452,22 +847,51 @@ test('an image that cannot be downloaded is reported, not thrown', async () => {
   assert.deepEqual(h.fetched, [ATTACHMENT, ATTACHMENT], 'tries without credentials, then once with the token');
 });
 
-test('"### " headings inside the entry are kept, not treated as form fields', async () => {
-  const content = 'Tested the latch.\n\n### Next steps\n\nOrder springs.\n\n### Content\n\nMore.\n\n### Images\n\nSee below.';
-  const h = await post(makeIssue('work-log', {}, { content, images: `![Rig](${ATTACHMENT})` }));
+// ── Other validation ──
+test('future date is invalid', async () => {
+  const h = await post(makeIssue('work-log', {}, { date: '2999-01-01' }));
+  assert.equal(h.result, 'invalid');
+  assert.match(h.out.message, /\*\*Date\*\* 2999-01-01 is in the future/);
+});
+
+test('missing required field (empty content) is invalid and writes nothing', async () => {
+  const h = await post(makeIssue('work-log', {}, { content: '' }));
+  assert.equal(h.result, 'invalid');
+  assert.match(h.out.message, /\*\*Content\*\* is empty/);
+  assert.equal(fs.existsSync(path.join(h.root, 'src')), false);
+});
+
+test('major update: malformed team-hours are invalid, "22 hrs" is fine', async () => {
+  const bad = await post(makeIssue('major-update', {}, { hours: 'a couple' }));
+  assert.equal(bad.result, 'invalid');
+  assert.match(bad.out.message, /\*\*Time committed\*\* "a couple" must be a positive number/);
+  const ok = await post(makeIssue('major-update', {}, { hours: '22 hrs' }));
+  assert.equal(ok.md.data.timeCommitted, 22);
+});
+
+// ── The old form still posts ──
+test('an issue from the old form (collaborator checkboxes) still posts, with the same fields as before', async () => {
+  const h = await post(legacyIssue({}, { contribution: 'Ran the bench test: "twenty" cycles, logged by hand.' }));
   assert.equal(h.result, 'written');
-  const md = h.read(h.out.file);
-  assert.match(md, /### Next steps\n\nOrder springs\./);
-  assert.match(md, /### Content\n\nMore\./);
-  assert.match(md, /### Images\n\nSee below\./);
-  assert.match(md, /alt: "Rig"/);
+  assert.equal(h.out.form, 'work-log-legacy');
+  // Same fields and order as before; the contribution is now a block scalar, like every contribution.
+  assert.match(h.md.text, /^collaborators: \[bo-two\]\ncontributions:\n  ada-one: \|-\n    Ran the bench test: "twenty" cycles, logged by hand\.\ntimeCommitted: 2\.5\n# Posted/m);
+  assert.equal(h.md.data.contributions['ada-one'], 'Ran the bench test: "twenty" cycles, logged by hand.');
+  assert.doesNotMatch(h.md.text, /hoursByMember/);
+  for (const contribution of ['', null]) {
+    const none = await post(legacyIssue({}, { contribution }));
+    assert.equal(none.result, 'written');
+    assert.doesNotMatch(none.md.text, /contributions/);
+  }
+  const self = await post(legacyIssue({}, { collaborators: ['Ada One', 'Bo Two', 'Cy Three'] }));
+  assert.deepEqual(self.md.data.collaborators, ['bo-two', 'cy-three'], 'ticking yourself is ignored');
+  const long = await post(legacyIssue({}, { contribution: 'x'.repeat(501) }));
+  assert.match(long.out.message, /\*\*Your contribution\*\* must be 500 characters or less/);
+  const hrs = await post(legacyIssue({}, { hours: '3h' }));
+  assert.equal(hrs.md.data.timeCommitted, 3);
 });
 
-test('ticking yourself as a collaborator is ignored', async () => {
-  const h = await post(makeIssue('work-log', {}, { collaborators: ['Ada One', 'Bo Two', 'Cy Three'] }));
-  assert.match(h.read(h.out.file), /^collaborators: \[bo-two, cy-three\]$/m);
-});
-
+// ── Skips, duplicates and crashes ──
 test('an unrelated issue is skipped, visibly', async () => {
   const h = await post({ number: 9, state: 'open', title: 'Site is slow', labels: [], user: { login: 'ada1' }, body: 'It takes ages.' });
   assert.equal(h.result, 'skip');
@@ -509,6 +933,7 @@ test('a crash still sets a result and fails the build step', async () => {
   assert.match(r.summaryText, /the posting script crashed/);
 });
 
+// ── Report step ──
 test('report: written + pushed → starts deploy, comments, closes, writes the summary', async () => {
   const h = await post(makeIssue('work-log'));
   const r = await reportFor(h, { pushStatus: 'pushed' });
@@ -517,7 +942,7 @@ test('report: written + pushed → starts deploy, comments, closes, writes the s
   assert.match(h.calls[1].body, /^Posted! It will be live/);
   assert.equal(h.calls[2].reason, 'completed');
   assert.deepEqual(r.failures, []);
-  for (const want of ['POSTED', '#7', 'work-log (via "Entry type" form field)', '@ada1', 'yes → ada-one', h.out.file, 'pushed', 'started']) {
+  for (const want of ['POSTED', '#7', 'work-log (via "Entry type" form field)', '@ada1', 'yes → ada-one', h.out.file, 'pushed', 'started', 'Every heading matched a form field.']) {
     assert.ok(r.summaryText.includes(want), `summary should mention ${want}`);
   }
 });
@@ -549,13 +974,13 @@ test('report: deploy cannot be started → entry kept, issue told, job failed', 
 });
 
 test('report: invalid → comments once, and not again for the same unchanged issue', async () => {
-  const issue = makeIssue('work-log', {}, { hours: 'lots' });
+  const issue = makeIssue('work-log', {}, { people: people({ 'ada-one': ['', 'lots'] }) });
   const first = await post(issue);
   const r1 = await reportFor(first);
   assert.deepEqual(types(first.calls), ['comment']);
-  assert.match(first.calls[0].body, /Time committed/);
+  assert.match(first.calls[0].body, /Ada One/);
   assert.equal(r1.failures.length, 1);
-  assert.match(r1.summaryText, /Time committed/);
+  assert.match(r1.summaryText, /Ada One/);
 
   const second = await post(issue, { comments: [{ body: first.calls[0].body }] });
   const r2 = await reportFor(second);
@@ -573,25 +998,32 @@ test('report: no result at all → summary says so and the job fails', async () 
   }
 });
 
-test('a hand-written <!-- g27:kind=… --> marker wins over everything else', async () => {
-  const issue = makeIssue('work-log', { labels: [{ name: 'major-update' }], title: 'x' }, { type: null });
-  issue.body = `<!-- g27:kind=work-log -->\n\n${issue.body}`;
-  assert.deepEqual(detectKind(issue), { kind: 'work-log', via: 'body marker' });
+// ── The real repo ──
+test('the real issue forms ask exactly the fields the parser reads, in its order', async () => {
+  const allow = JSON.parse(fs.readFileSync(path.join(repoRoot, '.github', 'allowlist.json'), 'utf8'));
+  for (const [file, layout] of [['work-log-entry.yml', 'work-log'], ['major-update.yml', 'major-update']]) {
+    const form = yaml.load(fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', file), 'utf8'));
+    const asked = form.body.filter(b => b.type !== 'markdown').map(b => b.attributes.label);
+    const expected = fieldsFor(layout, allow.members).map(f => f.label);
+    assert.deepEqual(asked, expected, `${file}: the form's fields and post-entry.cjs's expected headings differ`);
+    // A body built from the real form's own labels parses with nothing unmatched or missing.
+    const option = form.body.find(b => b.attributes?.label === 'Entry type').attributes.options[0];
+    const body = asked.map(l => section(l, l === 'Entry type' ? option : 'x')).join('\n\n');
+    assert.equal(detectKind({ title: '', labels: [], body }).kind, layout, `${file}: "Entry type" option "${option}" is not recognised`);
+    const parsed = parseForm(body, fieldsFor(layout, allow.members));
+    assert.deepEqual(parsed.missing, []);
+    assert.deepEqual(parsed.headings.filter(h => !h.field), []);
+  }
+  // No old fields left on the work-log form.
+  const yml = fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', 'work-log-entry.yml'), 'utf8');
+  assert.doesNotMatch(yml, /type: checkboxes|label: (Collaborators|Time committed|Your contribution)$/m);
 });
 
-test('the real issue forms still match the parser', async () => {
-  for (const [file, kind] of [['work-log-entry.yml', 'work-log'], ['major-update.yml', 'major-update']]) {
-    const yml = fs.readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', file), 'utf8').replace(/\r\n/g, '\n');
-    const labels = [...yml.matchAll(/^      label: (.+)$/gm)].map(m => m[1].trim());
-    for (const label of labels) assert.ok(label in FIELD_ORDER, `${file}: field "${label}" is not known to post-entry.cjs`);
-    for (const need of ['Entry type', 'Title', 'Date', 'Time committed', 'Images']) {
-      assert.ok(labels.includes(need), `${file}: field "${need}" is missing`);
-    }
-    assert.deepEqual([...labels].sort((a, b) => FIELD_ORDER[a] - FIELD_ORDER[b]), labels, `${file}: fields are not in the order post-entry.cjs expects`);
-    const option = yml.match(/label: Entry type[\s\S]*?options:\n\s*- (.+)/)?.[1].trim();
-    const body = labels.map(l => section(l, l === 'Entry type' ? option : 'x')).join('\n\n');
-    assert.equal(detectKind({ title: '', labels: [], body }).kind, kind, `${file}: "Entry type" option "${option}" is not recognised`);
-    assert.deepEqual(Object.keys(parseForm(body)).length, labels.length);
+test('every expected heading normalises to a different key (no two fields can collide)', async () => {
+  const allow = JSON.parse(fs.readFileSync(path.join(repoRoot, '.github', 'allowlist.json'), 'utf8'));
+  for (const layout of ['work-log', 'work-log-legacy', 'major-update']) {
+    const keys = fieldsFor(layout, allow.members).map(f => normalizeLabel(f.label));
+    assert.equal(new Set(keys).size, keys.length, `${layout}: two labels normalise to the same heading`);
   }
 });
 
@@ -601,15 +1033,29 @@ test('the real allowlist has at least one GitHub username in it', async () => {
   assert.ok(set.length > 0, 'every member has github: null — run `npm run sync:allowlist` after editing src/config/site.ts');
 });
 
+test('every existing entry in the repo still satisfies the schema', async () => {
+  const { MEMBERS } = await import(pathToFileURL(path.join(repoRoot, 'src', 'config', 'site.ts')).href);
+  const schema = workLogSchema(MEMBERS, path.join(repoRoot, 'public'));
+  const dir = path.join(repoRoot, 'src', 'content', 'work-log');
+  let n = 0;
+  for (const rel of fs.readdirSync(dir, { recursive: true }).map(String).filter(f => f.endsWith('.md'))) {
+    const { frontmatter } = parseFrontmatter(fs.readFileSync(path.join(dir, rel), 'utf8'));
+    const r = schema.safeParse(frontmatter);
+    assert.ok(r.success, `${rel}: ${r.error?.issues.map(i => i.message).join('; ')}`);
+    n++;
+  }
+  assert.ok(n > 0);
+});
+
 // ── Runner ────────────────────────────────────────────────────────────
 let failed = 0;
-for (const { name, fn } of cases) {
+for (const { name: title, fn } of cases) {
   try {
     await fn();
-    console.log(`  ok    ${name}`);
+    console.log(`  ok    ${title}`);
   } catch (err) {
     failed++;
-    console.log(`  FAIL  ${name}\n        ${String(err.message).split('\n').join('\n        ')}`);
+    console.log(`  FAIL  ${title}\n        ${String(err.message).split('\n').join('\n        ')}`);
   }
 }
 console.log(`\n${cases.length - failed} of ${cases.length} passed`);

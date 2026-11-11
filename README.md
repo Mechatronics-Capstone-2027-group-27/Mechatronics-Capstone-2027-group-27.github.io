@@ -183,8 +183,18 @@ Team members post through GitHub issue forms; `.github/workflows/post-entry.yml`
 file and commits it. Things a maintainer needs to know:
 
 - **Who can post** is `.github/allowlist.json`, generated from `MEMBERS`. Never edit it by hand.
+- **What a posted file looks like** is set by two templates: `.github/templates/work-log-entry.md` and
+  `.github/templates/major-update.md`. Edit those, not the script, to reorder fields, change the fixed lines or
+  drop an optional field; the notes at the top of each explain the rules. A new `{{placeholder}}` must first be
+  given a type in `PLACEHOLDERS` in `.github/scripts/entry-template.cjs`. Run `npm run test:post` after any
+  template change: it checks every generated file against the real content schema.
+- **The work-log form's per-person boxes** (what each member did, and their hours) are generated from `MEMBERS`
+  by `npm run sync:allowlist`, with labels from `.github/scripts/form-fields.cjs`, the same module the bot reads
+  them with. Don't edit that block of `work-log-entry.yml` by hand.
 - **Every run explains itself.** Actions → Post log entry → open the run: the summary at the top says what kind
-  of entry it found, who posted, whether they are on the allowlist, and what happened.
+  of entry it found, who posted, whether they are on the allowlist, and what happened. Below that it lists every
+  `### heading` in the issue and which form field it was read as; one marked ⚠️ matched no field. That is
+  normal for a member's own sub-heading, but if it is a form field, the form and the parser have drifted apart.
 - **To re-run an issue** without editing it: Actions → Post log entry → Run workflow → type the issue number.
 - **Before changing** `.github/scripts/post-entry.cjs` or an issue form, run `npm run test:post`.
 - **Do not switch on the `main` ruleset** without reading `docs/POSTING-INVESTIGATION.md`: the bot pushes straight

@@ -1,68 +1,18 @@
-// Content collection schemas (§6).
+// Content collections (§6).
 //
 // Astro 7 requires this file at src/content.config.ts — the legacy
 // src/content/config.ts location is a hard build error. The Markdown itself
 // still lives in src/content/work-log/<member-slug>/ and src/content/updates/.
 //
-// Anything here that fails makes `npm run build` fail with the file path in the
-// message. That is the §2 "dates and names on all entries" guarantee.
-//
-// The objects are strict: a frontmatter key the schema doesn't know (a typo such as
-// `colaborators`) is an error, not something silently dropped.
-import fs from 'node:fs';
-import path from 'node:path';
+// The frontmatter rules themselves are in src/content.schemas.ts, so the posting
+// bot's tests can check generated files against exactly the same schema. Anything
+// that fails makes `npm run build` fail with the file path in the message.
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
-import { z } from 'astro/zod';
 import { MEMBERS, MEMBER_SLUGS } from './config/site';
+import { updateSchema, workLogSchema } from './content.schemas';
 
 const VALID = MEMBER_SLUGS.join(', ');
-
-const memberSlug = (field: string) =>
-  z.string().refine(v => MEMBERS.some(m => m.slug === v), {
-    error: issue => `${field} "${String(issue.input)}" is not a team member. Valid slugs: ${VALID}`,
-  });
-
-/** A calendar date that isn't in the future. One day of slack absorbs timezone differences. */
-const pastDate = z.coerce
-  .date({ error: 'date is required and must be YYYY-MM-DD' })
-  .refine(d => d.getTime() <= Date.now() + 24 * 60 * 60 * 1000, {
-    error: 'date is in the future — almost always a typo',
-  });
-
-/**
- * Frontmatter images are string paths into public/ (see CLAUDE.md → Images), so nothing
- * else checks them. The name is compared exactly: GitHub Pages is case-sensitive even
- * when the laptop that wrote the entry is not.
- */
-const isExternal = (src: string) => /^https?:\/\//.test(src);
-function publicFileExists(src: string) {
-  const file = path.join(process.cwd(), 'public', src);
-  try {
-    return fs.readdirSync(path.dirname(file)).includes(path.basename(file));
-  } catch {
-    return false;
-  }
-}
-
-const imageSrc = z
-  .string()
-  .min(1)
-  .refine(src => src.startsWith('/') || isExternal(src), {
-    error: issue => `image src "${String(issue.input)}" must be a path from the site root, e.g. /img/work-log/photo.jpg`,
-  })
-  .refine(src => !src.startsWith('/') || publicFileExists(src), {
-    error: issue =>
-      `image file not found: public${String(issue.input)} — check the spelling and the upper/lower case of the file name`,
-  });
-
-const image = z.strictObject({
-  src: imageSrc,
-  alt: z.string({ error: 'every image needs alt text' }).min(1, { error: 'every image needs alt text' }),
-  caption: z.string().optional(),
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
-});
 
 /**
  * Work-log IDs are "<folder>/<file>". The folder must be a member slug and must
@@ -90,57 +40,12 @@ function workLogId({ entry, data }: { entry: string; data: Record<string, unknow
 
 const workLog = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/work-log', generateId: workLogId }),
-  schema: z
-    .strictObject({
-      title: z.string({ error: 'title is required' }).min(5).max(120),
-      date: pastDate,
-      author: memberSlug('author'),
-      collaborators: z.array(memberSlug('collaborator')).default([]),
-      timeCommitted: z
-        .number({ error: 'timeCommitted is required (hours, e.g. 2.5)' })
-        .positive()
-        .max(24),
-      // What each participant did, keyed by member slug. Optional; shown as written.
-      contributions: z.record(z.string(), z.string().trim().min(1, { error: 'a contribution cannot be empty' })).default({}),
-      // Hours for a participant who spent a different amount than `timeCommitted`.
-      hoursByMember: z
-        .record(z.string(), z.number({ error: 'hours must be a number, e.g. 1.5' }).positive().max(24))
-        .default({}),
-      images: z.array(image).default([]),
-      tags: z.array(z.string()).default([]),
-      draft: z.boolean().default(false),
-    })
-    .superRefine((e, ctx) => {
-      if (e.collaborators.includes(e.author)) {
-        ctx.addIssue({ code: 'custom', path: ['collaborators'], message: 'collaborators must not include the author' });
-      }
-      if (new Set(e.collaborators).size !== e.collaborators.length) {
-        ctx.addIssue({ code: 'custom', path: ['collaborators'], message: 'collaborators contains duplicates' });
-      }
-      // Per-person fields may only name people who are on this entry.
-      const onEntry = [e.author, ...e.collaborators];
-      for (const field of ['contributions', 'hoursByMember'] as const) {
-        for (const slug of Object.keys(e[field])) {
-          if (onEntry.includes(slug)) continue;
-          const message = MEMBERS.some(m => m.slug === slug)
-            ? `${field} names "${slug}", who is not the author or a collaborator of this entry. Add them to collaborators or remove the line.`
-            : `${field} names "${slug}", who is not a team member. Valid slugs: ${VALID}`;
-          ctx.addIssue({ code: 'custom', path: [field, slug], message });
-        }
-      }
-    }),
+  schema: workLogSchema(MEMBERS),
 });
 
 const updates = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/updates' }),
-  schema: z.strictObject({
-    title: z.string({ error: 'title is required' }).min(5).max(120),
-    date: pastDate,
-    timeCommitted: z.number({ error: 'timeCommitted is required (team-hours)' }).positive(),
-    images: z.array(image).min(1, { error: 'major updates need at least one image' }),
-    featured: z.boolean().default(false),
-    draft: z.boolean().default(false),
-  }),
+  schema: updateSchema(),
 });
 
 export const collections = { 'work-log': workLog, updates };
