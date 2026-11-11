@@ -70,7 +70,7 @@ export const MEMBERS = [
   { slug: 'ian-macpherson',  name: 'Ian Macpherson',  github: 'IanJinzoTakeda', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
   { slug: 'david-makarczyk', name: 'David Makarczyk', github: 'DavidM2004', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
   { slug: 'nitya-singh',     name: 'Nitya Singh',     github: 'sky1515', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
-  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'MatthewZelenka', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'TODO' },
+  { slug: 'matthew-zelenka', name: 'Matthew Zelenka', github: 'MatthewZelenka', email: 'TODO', showEmail: false, linkedin: 'TODO', role: 'TODO', photo: 'team/matthew-zelenka.jpg' },
 ] as const;
 
 /** Front-page section order. Reorder this array to reorder the page. */
