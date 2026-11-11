@@ -56,9 +56,15 @@ const clean = value => {
  * Splits an issue-form body into fields.
  *
  * Headings are matched to `fields` by normalizeLabel() — case, spacing, dashes and
- * trailing punctuation don't matter. Only a field's own heading, in form order,
- * starts that field, so a "### Next steps" a member writes inside their text stays
- * part of it. For the form's last field, only the last such heading counts.
+ * trailing punctuation don't matter.
+ *
+ * Which occurrence starts a field: GitHub writes every field's heading once, in form
+ * order, and anything a member types sits between two of them. So, working back from
+ * the last field, each field starts at the LAST line carrying its heading that comes
+ * before the next field's start. A copy of any field's heading typed inside someone's
+ * text — "### Images" in Content, "### Title" in a contribution, a "### Next steps" —
+ * therefore stays part of that text, wherever that field sits in the form. Nothing
+ * here depends on which field comes last.
  *
  * Returns every `### ` heading found, and what it was read as, so a heading that
  * matched nothing is reported rather than lost; and the fields never found.
@@ -66,11 +72,21 @@ const clean = value => {
 function parseForm(body, fields) {
   const lines = (body || '').replace(/\r\n?/g, '\n').split('\n');
   const index = new Map(fields.map((f, i) => [normalizeLabel(f.label), i]));
-  const lastAt = new Map();
+  const seen = fields.map(() => []); // line numbers carrying each field's heading
   lines.forEach((line, i) => {
     const h = readHeading(line);
-    if (h !== undefined) lastAt.set(normalizeLabel(h), i);
+    const at = h === undefined ? undefined : index.get(normalizeLabel(h));
+    if (at !== undefined) seen[at].push(i);
   });
+  const startsField = new Map(); // line number → field index
+  let bound = Infinity;
+  for (let at = fields.length - 1; at >= 0; at--) {
+    const before = seen[at].filter(i => i < bound);
+    if (before.length) {
+      bound = before[before.length - 1];
+      startsField.set(bound, at);
+    }
+  }
 
   const values = {};
   const headings = [];
@@ -82,9 +98,8 @@ function parseForm(body, fields) {
   lines.forEach((line, i) => {
     const h = readHeading(line);
     if (h === undefined) return void buf.push(line);
-    const n = normalizeLabel(h);
-    const at = index.get(n);
-    const isField = at !== undefined && at > current && (at !== fields.length - 1 || lastAt.get(n) === i);
+    const at = startsField.get(i);
+    const isField = at !== undefined;
     if (isField) {
       flush();
       current = at;
@@ -439,8 +454,12 @@ module.exports = async function run({
 
     // A per-person heading the parser did not recognise would lose that person's
     // part of the entry, so it stops the post instead of being skipped quietly.
+    // A copy of a KNOWN member's heading inside someone's text is just text (and is
+    // listed in the summary); only a name that matches no field means a lost block.
     if (layout === 'work-log') {
-      for (const h of parsed.headings.filter(x => !x.field && / - (contribution|hours)$/.test(normalizeLabel(x.heading)))) {
+      const known = new Set(fields.map(x => normalizeLabel(x.label)));
+      const lost = x => !x.field && / - (contribution|hours)$/.test(normalizeLabel(x.heading)) && !known.has(normalizeLabel(x.heading));
+      for (const h of parsed.headings.filter(lost)) {
         errors.push(`**Form**: the section "${h.heading}" does not match any team member, so what it contains could not be read. If a name in the form is out of date, tell whoever maintains the site.`);
       }
     }
