@@ -19,14 +19,17 @@ Every post is also recorded in git with a real timestamp, so backdated entries a
    - **Entry type**: leave it as it is. If it shows "None", that is fine too.
    - **Title**: what you did. Keep the `[Work log]` at the start of the issue title.
    - **Date**: leave it blank for today.
-   - **Collaborators**: tick everyone who worked on it with you.
-   - **Time committed**: in hours. Decimals are fine.
-   - **Content**: write in Markdown, and say what you did, what you found, and what's next.
-   - **Your contribution** (optional): one line on what *you* did. Worth filling in whenever you ticked collaborators.
+   - **Content of progress**: the task as a whole, in Markdown — what was done, what you found, what's next.
+   - **Who did what**: there is a box for each team member, with their hours under it. **Fill in a box for
+     everyone who worked on this, including yourself** — filling in someone's box is what adds them to the
+     entry, and a blank box means they weren't involved. Write that person's own part, not the whole story
+     again ("Attended, no specific deliverable" is fine for someone who only sat in), and their hours.
+     Your own hours are always required; your own description is optional.
    - **Images**: see "Attaching photos" below.
 3. Submit. Within a minute or two a bot adds the entry to the site, comments with the link and closes the issue.
-   If something's wrong, such as a bad date, the bot comments with what to fix and leaves the issue open.
-   Edit the issue and it tries again.
+   If something's wrong, such as a bad date, or someone's box filled in without their hours (or hours without
+   a box), or placeholder text like `[TODO: …]` left in a field, the bot comments with what to fix and leaves
+   the issue open. Edit the issue and it tries again.
 
 Your name comes from your GitHub account. Only the five GitHub usernames in `src/config/site.ts` can post.
 Anyone else's issue is closed automatically. If the bot says *you* are not on the list, your username is
@@ -76,8 +79,9 @@ contributions:
 ```
 
 Each person's line is shown under their name on the entry page, and on their own tab's card. It is optional;
-if you leave it out, nothing extra is shown. The issue form's **Your contribution** field fills in the
-poster's line. To add yours to an entry someone else posted, edit that entry's Markdown file and add a line
+if you leave it out, nothing extra is shown. On the issue form, each person's box becomes their line (and
+their hours become their `hoursByMember` figure), so a post through the form does all of this for you.
+To add yours to an entry someone else posted, edit that entry's Markdown file and add a line
 under your slug. Only the author and listed collaborators can have a line — anyone else fails the build.
 For more than one line, use a YAML block (`david-makarczyk: |` followed by indented lines). It is rendered as
 Markdown, so headings, lists and links work; headings are shown smaller so they sit under your name.
@@ -87,7 +91,7 @@ Markdown, so headings, lists and links work; headings are shown smaller so they 
 - `timeCommitted` is the time **each** listed person spent. A two-hour meeting with four people is
   `timeCommitted: 2`, not 8 and not 0.5.
 - If people spent different amounts, add `hoursByMember` for the ones who differ. Anyone not listed gets
-  `timeCommitted`:
+  `timeCommitted`. (An entry posted through the issue form lists everyone in `hoursByMember`.) For example:
 
   ```yaml
   timeCommitted: 2
@@ -172,7 +176,7 @@ and push again.
 ## Adding or changing a team member
 
 1. Edit `MEMBERS` in `src/config/site.ts`.
-2. Run `npm run sync:allowlist`. It regenerates `.github/allowlist.json` and the issue form's collaborator list.
+2. Run `npm run sync:allowlist`. It regenerates `.github/allowlist.json` and the issue form's per-person boxes.
 3. If you changed a slug, rename that member's folder under `src/content/work-log/` and update any
    `collaborators:`, `contributions:` and `hoursByMember:` entries that mention the old slug.
 4. Commit everything together. CI fails if step 2 was skipped.

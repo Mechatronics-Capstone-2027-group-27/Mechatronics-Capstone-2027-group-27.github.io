@@ -1,7 +1,9 @@
 // Generates everything outside src/ that needs the team list, from MEMBERS in
 // src/config/site.ts, so nothing is edited by hand:
 //   - .github/allowlist.json                       (the posting Action's allowlist)
-//   - the collaborator checkboxes in .github/ISSUE_TEMPLATE/work-log-entry.yml
+//   - the per-person blocks (what each member did, and their hours) in
+//     .github/ISSUE_TEMPLATE/work-log-entry.yml, labelled by .github/scripts/form-fields.cjs —
+//     the same module the posting bot reads them with, so the two cannot drift apart
 //
 //   npm run sync:allowlist    — rewrite both
 //   npm run check:allowlist   — exit 1 if either is stale (used in CI)
@@ -9,10 +11,12 @@
 // Requires Node >= 22.18, which imports .ts files directly (type stripping).
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { MEMBERS } = await import(new URL('../src/config/site.ts', import.meta.url).href);
+const { memberFormYaml } = createRequire(import.meta.url)('../.github/scripts/form-fields.cjs');
 
 const isSet = v => typeof v === 'string' && v.length > 0 && !v.startsWith('TODO');
 const members = MEMBERS.map(m => ({ slug: m.slug, name: m.name, github: isSet(m.github) ? m.github : null }));
@@ -27,7 +31,7 @@ const allowlist = `${JSON.stringify(
   2,
 )}\n`;
 
-// 2 — issue form checkboxes, between the BEGIN/END markers
+// 2 — issue form per-person blocks, between the BEGIN/END markers
 const formPath = path.join(root, '.github', 'ISSUE_TEMPLATE', 'work-log-entry.yml');
 const formCurrent = read(formPath);
 const block = /( *# BEGIN members[^\n]*\n)[\s\S]*?( *# END members)/;
@@ -37,7 +41,7 @@ if (!block.test(formCurrent)) {
 }
 const form = formCurrent.replace(block, (_, begin, end) => {
   const indent = begin.match(/^ */)[0];
-  return begin + members.map(m => `${indent}- label: ${m.name}\n`).join('') + end;
+  return begin + members.map(m => memberFormYaml(m, indent)).join('') + end;
 });
 
 const outputs = [

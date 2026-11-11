@@ -7,12 +7,17 @@
 //
 // run() ALWAYS sets the `entry_result` output — one of:
 //   skip | rejected | invalid | written | duplicate | misconfigured | error
-// plus: issue, title, trigger, kind, via, login, matched, author, file, url, message, fingerprint.
+// plus: issue, title, trigger, kind, via, login, matched, author, file, url, message,
+// fingerprint, form, headings (JSON), missing.
 // It never commits — the workflow does that between run() and report().
 //
 // The output must NOT be called `result`: actions/github-script writes its script
 // block's return value to an output of that name after the block finishes, which
 // overwrites anything set here. That silently broke every post once.
+//
+// The form's labels come from ./form-fields.cjs (shared with the script that writes
+// the form); the file's layout comes from .github/templates/*.md via
+// ./entry-template.cjs. No dependencies: the Action does not install node_modules.
 //
 // Tested offline by `npm run test:post` (scripts/test-post-entry.mjs), which runs the
 // workflow's real script blocks the way github-script does.
@@ -20,74 +25,101 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { LABELS, fieldsFor, normalizeLabel } = require('./form-fields.cjs');
+const template = require('./entry-template.cjs');
 
 const NO_RESPONSE = '_No response_';
 
-// Issue-form field labels, in the order the forms emit them. "Content of progress"
-// (work log) and "Content" (major update) are the same field. These must match
-// .github/ISSUE_TEMPLATE/*.yml character for character — the test harness checks that.
-const KIND_FIELD = 'Entry type';
-const FIELD_ORDER = {
-  [KIND_FIELD]: 0,
-  'Title': 1,
-  'Date': 2,
-  'Collaborators': 3,
-  'Time committed': 4,
-  'Content of progress': 5,
-  'Content': 5,
-  'Your contribution': 6,
-  'Images': 7,
+/**
+ * Bracketed placeholder text such as "[TODO: David's part]" (any case). Nothing addressed
+ * to the team may reach the site, so a field still holding one is sent back for editing
+ * rather than posted. Plain prose ("our TODO list") is fine; only the bracketed form counts.
+ */
+const PLACEHOLDER = /\[\s*todo\b[^\]\n]*\]?/i;
+const placeholderIn = text => (text.match(PLACEHOLDER) || [''])[0].slice(0, 60);
+const TEMPLATES = path.join(__dirname, '..', 'templates');
+const TEMPLATE_FILE = { 'work-log': 'work-log-entry.md', 'major-update': 'major-update.md' };
+
+/** "### Label" → "Label". Tolerates up to three leading spaces and a closing "###". */
+function readHeading(line) {
+  const m = line.match(/^ {0,3}###\s+(.*?)(?:\s+#+)?\s*$/);
+  return m && m[1] !== '' ? m[1] : undefined;
+}
+
+/** Field values from a "### Label\n\nvalue" body, blank (or "_No response_") as ''. */
+const clean = value => {
+  const v = value.trim();
+  return v === NO_RESPONSE ? '' : v;
 };
-const LAST_FIELD = 'Images';
-const fieldKey = label => (label === 'Content of progress' ? 'Content' : label);
 
 /**
- * Issue-form bodies are "### Label\n\nvalue" blocks. Only the form's own labels,
- * in form order, start a new field — so a "### Next steps" heading that a member
- * writes inside their entry stays part of the entry.
+ * Splits an issue-form body into fields.
+ *
+ * Headings are matched to `fields` by normalizeLabel() — case, spacing, dashes and
+ * trailing punctuation don't matter. Only a field's own heading, in form order,
+ * starts that field, so a "### Next steps" a member writes inside their text stays
+ * part of it. For the form's last field, only the last such heading counts.
+ *
+ * Returns every `### ` heading found, and what it was read as, so a heading that
+ * matched nothing is reported rather than lost; and the fields never found.
  */
-function parseForm(body) {
-  const lines = (body || '').replace(/\r\n/g, '\n').split('\n');
-  const heading = line => line.match(/^### (.+?)\s*$/)?.[1];
-  const lastOfLastField = lines.reduce((at, line, i) => (heading(line) === LAST_FIELD ? i : at), -1);
+function parseForm(body, fields) {
+  const lines = (body || '').replace(/\r\n?/g, '\n').split('\n');
+  const index = new Map(fields.map((f, i) => [normalizeLabel(f.label), i]));
+  const lastAt = new Map();
+  lines.forEach((line, i) => {
+    const h = readHeading(line);
+    if (h !== undefined) lastAt.set(normalizeLabel(h), i);
+  });
 
-  const fields = {};
-  let label = null;
-  let order = -1;
+  const values = {};
+  const headings = [];
+  let current = -1;
   let buf = [];
   const flush = () => {
-    if (label === null) return;
-    const value = buf.join('\n').trim();
-    fields[fieldKey(label)] = value === NO_RESPONSE ? '' : value;
+    if (current >= 0) values[fields[current].key] = clean(buf.join('\n'));
   };
   lines.forEach((line, i) => {
-    const h = heading(line);
-    const isField =
-      h !== undefined && h in FIELD_ORDER && FIELD_ORDER[h] > order && (h !== LAST_FIELD || i === lastOfLastField);
+    const h = readHeading(line);
+    if (h === undefined) return void buf.push(line);
+    const n = normalizeLabel(h);
+    const at = index.get(n);
+    const isField = at !== undefined && at > current && (at !== fields.length - 1 || lastAt.get(n) === i);
     if (isField) {
       flush();
-      label = h;
-      order = FIELD_ORDER[h];
+      current = at;
       buf = [];
+      headings.push({ heading: h, field: fields[at].label });
     } else {
+      headings.push({ heading: h, field: null, inside: current >= 0 ? fields[current].label : null });
       buf.push(line);
     }
   });
   flush();
-  return fields;
+  const missing = fields.filter(f => !(f.key in values)).map(f => f.label);
+  return { values, headings, missing };
+}
+
+/** The "Entry type" field alone, read before the kind (and so the layout) is known. */
+function kindField(body) {
+  const lines = (body || '').replace(/\r\n?/g, '\n').split('\n');
+  const start = lines.findIndex(l => normalizeLabel(readHeading(l) ?? '') === normalizeLabel(LABELS.kind));
+  if (start === -1) return '';
+  const end = lines.findIndex((l, i) => i > start && readHeading(l) !== undefined);
+  return clean(lines.slice(start + 1, end === -1 ? undefined : end).join('\n'));
 }
 
 /**
  * Which kind of entry is this issue? Nothing here may depend on a label existing
  * in the repo, so labels are only one of four signals, tried in this order.
  */
-function detectKind(issue, fields = parseForm(issue.body)) {
+function detectKind(issue) {
   const marker = (issue.body || '').match(/<!--\s*g27:kind=(work-log|major-update)\s*-->/);
   if (marker) return { kind: marker[1], via: 'body marker' };
 
-  const type = (fields[KIND_FIELD] || '').trim().toLowerCase();
-  if (type.startsWith('work log')) return { kind: 'work-log', via: `"${KIND_FIELD}" form field` };
-  if (type.startsWith('major update')) return { kind: 'major-update', via: `"${KIND_FIELD}" form field` };
+  const type = kindField(issue.body).toLowerCase();
+  if (type.startsWith('work log')) return { kind: 'work-log', via: `"${LABELS.kind}" form field` };
+  if (type.startsWith('major update')) return { kind: 'major-update', via: `"${LABELS.kind}" form field` };
 
   const labels = (issue.labels || []).map(l => (typeof l === 'string' ? l : l.name));
   if (labels.includes('work-log')) return { kind: 'work-log', via: 'label' };
@@ -100,6 +132,24 @@ function detectKind(issue, fields = parseForm(issue.body)) {
   return { kind: null, via: 'none' };
 }
 
+/**
+ * The work-log form changed from collaborator checkboxes to per-person boxes. An
+ * issue with the old form's headings and none of the new ones — filed from a stale
+ * copy of the form, or replayed — is read with the old layout and posts as it did.
+ */
+function workLogLayout(body, members) {
+  const found = new Set();
+  for (const line of (body || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const h = readHeading(line);
+    if (h !== undefined) found.add(normalizeLabel(h));
+  }
+  const has = label => found.has(normalizeLabel(label));
+  const perPerson = fieldsFor('work-log', members).filter(f => f.slug);
+  if (perPerson.some(f => has(f.label))) return 'work-log';
+  if (has(LABELS.collaborators) || has(LABELS.yourContribution) || has(LABELS.hours)) return 'work-log-legacy';
+  return 'work-log';
+}
+
 /** Ticked checkbox labels: "- [X] Name". */
 function checked(value) {
   return (value || '')
@@ -107,6 +157,17 @@ function checked(value) {
     .map(l => l.match(/^- \[[xX]\] (.+)$/))
     .filter(Boolean)
     .map(m => m[1].trim());
+}
+
+/**
+ * Hours as typed: "2", "2.5", "2.5 h", "2.5 hrs", "2.5 hours", "3h".
+ * → { blank: true } | { value: number } (NaN when it isn't a number).
+ */
+function parseHours(raw) {
+  const text = (raw || '').trim();
+  if (text === '') return { blank: true, raw: text };
+  const stripped = text.replace(/\s*(hours?|hrs?|h)\.?$/i, '').trim();
+  return { blank: false, raw: text, value: stripped === '' ? NaN : Number(stripped) };
 }
 
 /** Markdown and HTML images from the "Images" textarea. */
@@ -134,8 +195,6 @@ const kebab = s =>
     .replace(/-+/g, '-')
     .slice(0, 60)
     .replace(/-$/, '') || 'entry';
-
-const yamlStr = s => JSON.stringify(s); // JSON strings are valid YAML scalars
 
 function today() {
   // The team is in Waterloo; "today" means Eastern time, not UTC.
@@ -184,6 +243,9 @@ async function download(url, token) {
   return { bytes, ext };
 }
 
+/** The "Posted from" line every entry carries; how an issue already posted is recognised. */
+const postedLine = (number, login) => `# Posted from issue #${number} by @${login}`;
+
 /** The Markdown file already written for this issue, if any (repo-relative path). */
 function findPosted(root, number) {
   const marker = new RegExp(`^# Posted from issue #${number} by `, 'm');
@@ -205,6 +267,48 @@ function entryUrl(context, file) {
   return `${site}/${file.replace(/^src\/content\//, '').replace(/\.md$/, '')}/`;
 }
 
+/**
+ * Who took part and for how long, from the per-person boxes.
+ * participants = the author, plus everyone whose contribution box is filled in.
+ */
+function readPeople({ f, members, author, errors }) {
+  const contributions = {};
+  const hoursByMember = {};
+  // Author first, then the team in MEMBERS order — the order participants() uses.
+  const ordered = [...members.filter(m => m.slug === author.slug), ...members.filter(m => m.slug !== author.slug)];
+  for (const m of ordered) {
+    const isAuthor = m.slug === author.slug;
+    const text = f[`contribution:${m.slug}`] || '';
+    const h = parseHours(f[`hours:${m.slug}`]);
+    const who = isAuthor ? `**${m.name}** (you)` : `**${m.name}**`;
+    const involved = isAuthor || text !== '';
+
+    if (!h.blank && !involved) {
+      errors.push(`${who}: hours are filled in ("${h.raw}") but the contribution box is blank. Say what ${m.name} did, or clear the hours if they weren't involved.`);
+      continue;
+    }
+    if (!involved) continue;
+    if (h.blank) {
+      errors.push(isAuthor
+        ? `${who}: your own hours are required — fill in "${m.name} — hours".`
+        : `${who}: the contribution is filled in but the hours are blank. Add how long ${m.name} spent.`);
+    } else if (!Number.isFinite(h.value) || h.value <= 0) {
+      errors.push(`${who}: hours "${h.raw}" must be a number more than 0, e.g. 2.5.`);
+    } else if (h.value > 24) {
+      errors.push(`${who}: hours must be 24 or less for a single entry.`);
+    } else {
+      hoursByMember[m.slug] = h.value;
+    }
+    if (text && PLACEHOLDER.test(text)) {
+      errors.push(`${who}: the contribution still contains placeholder text ("${placeholderIn(text)}"). Replace it with what ${m.name} actually did, or clear the box and the hours if they weren't involved.`);
+    } else if (text) {
+      contributions[m.slug] = text;
+    }
+  }
+  const participants = [author.slug, ...members.map(m => m.slug).filter(s => s !== author.slug && contributions[s])];
+  return { participants, contributions, hoursByMember };
+}
+
 module.exports = async function run({
   github,
   context,
@@ -213,6 +317,7 @@ module.exports = async function run({
   token = process.env.GITHUB_TOKEN,
   issueNumber = process.env.ISSUE_NUMBER,
   fetchImage = download,
+  templatesDir = TEMPLATES,
 }) {
   // Everything learned so far, so even an early exit reports the kind, author, etc.
   core.info(`[post-entry] entered run() — event ${context.eventName}, issue_number input "${issueNumber || ''}"`);
@@ -224,6 +329,7 @@ module.exports = async function run({
     for (const [k, v] of Object.entries(out)) core.setOutput(k, v == null ? '' : String(v));
     return { ...out };
   };
+  const warn = msg => (core.warning ? core.warning(msg) : core.info(`[post-entry] warning: ${msg}`));
 
   try {
     const manual = context.eventName === 'workflow_dispatch';
@@ -243,8 +349,7 @@ module.exports = async function run({
     out.matched = 'not checked';
     if (issue.pull_request) return done('skip', { message: `#${number} is a pull request, not an issue.` });
 
-    const f = parseForm(issue.body);
-    const { kind, via } = detectKind(issue, f);
+    const { kind, via } = detectKind(issue);
     out.kind = kind || 'none';
     out.via = via;
     core.info(`[post-entry] issue #${number} by @${issue.user.login}, state ${issue.state}, kind ${out.kind} (via ${via})`);
@@ -293,41 +398,87 @@ module.exports = async function run({
     out.author = author.slug;
     core.info(`[post-entry] allowlist match: ${author.slug}`);
 
-    // ── Step 2: parse and validate ─────────────────────────────────────
+    // The template is checked before anything is downloaded or written, so a broken
+    // template fails here, by name, and never half-writes an entry.
+    let render;
+    try {
+      render = template.load(path.join(templatesDir, TEMPLATE_FILE[kind]), `.github/templates/${TEMPLATE_FILE[kind]}`);
+    } catch (err) {
+      const message = `The entry template is broken, so nothing can be posted until it is fixed: ${err.message}`;
+      core.setFailed(message);
+      return done('misconfigured', { message });
+    }
+
+    // ── Step 2: parse, and say what was found ──────────────────────────
+    const layout = kind === 'major-update' ? 'major-update' : workLogLayout(issue.body, allow.members);
+    const fields = fieldsFor(layout, allow.members);
+    const parsed = parseForm(issue.body, fields);
+    const f = parsed.values;
+    out.form = layout;
+    out.headings = JSON.stringify(parsed.headings);
+    out.missing = parsed.missing.join(', ');
+    for (const h of parsed.headings.filter(x => !x.field)) {
+      warn(`Issue #${number}: "### ${h.heading}" matched no form field; kept as text inside ${h.inside ? `"${h.inside}"` : 'nothing (before the first field)'}.`);
+    }
+    if (parsed.missing.length) warn(`Issue #${number}: form fields not found in the issue: ${parsed.missing.join(', ')}.`);
+
+    // ── Step 3: validate ───────────────────────────────────────────────
     const errors = [];
-    const title = (f['Title'] || '').trim();
-    const date = (f['Date'] || '').trim() || today();
-    const hoursRaw = (f['Time committed'] || '').trim().replace(/\s*(hours?|hrs?|h)\.?$/i, '').trim();
-    const hours = hoursRaw === '' ? NaN : Number(hoursRaw);
-    const content = (f['Content'] || '').trim();
-    // The poster's own line for `contributions` (work log only, optional).
-    const contribution = kind === 'work-log' ? (f['Your contribution'] || '').replace(/\s+/g, ' ').trim() : '';
-    const images = extractImages(f['Images']);
+    const title = (f.title || '').trim();
+    const date = (f.date || '').trim() || today();
+    const content = (f.content || '').trim();
+    const images = extractImages(f.images);
 
     if (title.length < 5 || title.length > 120) errors.push('**Title** must be 5–120 characters.');
     if (!validDate(date)) errors.push(`**Date** "${date}" is not a real date in YYYY-MM-DD form.`);
     else if (date > today()) errors.push(`**Date** ${date} is in the future.`);
-    if (!Number.isFinite(hours) || hours <= 0) errors.push(`**Time committed** "${hoursRaw}" must be a positive number of hours.`);
-    else if (kind === 'work-log' && hours > 24) errors.push('**Time committed** must be 24 hours or less for a single entry.');
     if (!content) errors.push('**Content** is empty.');
-    if (contribution.length > 500) errors.push('**Your contribution** must be 500 characters or less — put the detail in the content.');
+    if (PLACEHOLDER.test(title)) errors.push(`**Title** still contains placeholder text ("${placeholderIn(title)}").`);
+    if (PLACEHOLDER.test(content)) errors.push(`**Content** still contains placeholder text ("${placeholderIn(content)}"). Replace it with what actually happened.`);
     if (kind === 'major-update' && images.length === 0) errors.push('**Images**: major updates need at least one image.');
 
+    // A per-person heading the parser did not recognise would lose that person's
+    // part of the entry, so it stops the post instead of being skipped quietly.
+    if (layout === 'work-log') {
+      for (const h of parsed.headings.filter(x => !x.field && / - (contribution|hours)$/.test(normalizeLabel(x.heading)))) {
+        errors.push(`**Form**: the section "${h.heading}" does not match any team member, so what it contains could not be read. If a name in the form is out of date, tell whoever maintains the site.`);
+      }
+    }
+
+    let hours;
     let collaborators = [];
-    if (kind === 'work-log') {
-      const names = checked(f['Collaborators']);
-      for (const name of names) {
+    let contributions = {};
+    let hoursByMember = {};
+    if (layout === 'work-log') {
+      const people = readPeople({ f, members: allow.members, author, errors });
+      collaborators = people.participants.filter(s => s !== author.slug);
+      contributions = people.contributions;
+      hoursByMember = people.hoursByMember;
+      hours = hoursByMember[author.slug]; // timeCommitted: still "hours per participant"
+    } else {
+      const h = parseHours(f.hours);
+      hours = h.value;
+      if (h.blank || !Number.isFinite(h.value) || h.value <= 0) errors.push(`**Time committed** "${h.raw}" must be a positive number of hours.`);
+      else if (kind === 'work-log' && h.value > 24) errors.push('**Time committed** must be 24 hours or less for a single entry.');
+    }
+    if (layout === 'work-log-legacy') {
+      // Old form: ticked names, and one optional line for the poster.
+      for (const name of checked(f.collaborators)) {
         const m = allow.members.find(x => x.name === name);
         if (!m) errors.push(`**Collaborators**: "${name}" is not a current team member.`);
         else if (m.slug !== author.slug) collaborators.push(m.slug);
       }
       collaborators = [...new Set(collaborators)];
+      const line = (f.yourContribution || '').replace(/\s+/g, ' ').trim();
+      if (line.length > 500) errors.push('**Your contribution** must be 500 characters or less — put the detail in the content.');
+      else if (PLACEHOLDER.test(line)) errors.push(`**Your contribution** still contains placeholder text ("${placeholderIn(line)}").`);
+      else if (line) contributions = { [author.slug]: line };
     }
 
     // Identifies this exact version of the issue, so the same errors aren't commented twice.
     const fingerprint = crypto.createHash('sha1').update(`${issue.title}\n${issue.body || ''}`).digest('hex').slice(0, 12);
     if (errors.length) return done('invalid', { fingerprint, message: errors.map(e => `- ${e}`).join('\n') });
-    core.info(`[post-entry] validation passed; ${images.length} image(s) to download`);
+    core.info(`[post-entry] validation passed (${layout} form); ${images.length} image(s) to download`);
 
     // ── Download images ────────────────────────────────────────────────
     // The issue number keeps two posts running at once from picking the same file name.
@@ -350,28 +501,40 @@ module.exports = async function run({
       return done('invalid', { fingerprint, message: `- **Images**: ${err.message}` });
     }
 
-    // ── Write the Markdown file ────────────────────────────────────────
+    // ── Write the Markdown file, from the template ─────────────────────
     const dir = kind === 'work-log'
       ? path.join(root, 'src', 'content', 'work-log', author.slug)
       : path.join(root, 'src', 'content', 'updates');
-    fs.mkdirSync(dir, { recursive: true });
     let slug = `${date}-${kebab(title)}`;
     for (let n = 2; fs.existsSync(path.join(dir, `${slug}.md`)); n++) slug = `${date}-${kebab(title)}-${n}`;
 
-    const fm = ['---', `title: ${yamlStr(title)}`, `date: ${date}`];
-    if (kind === 'work-log') {
-      fm.push(`author: ${author.slug}`);
-      fm.push(`collaborators: [${collaborators.join(', ')}]`);
-      if (contribution) fm.push('contributions:', `  ${author.slug}: ${yamlStr(contribution)}`);
+    let markdown;
+    try {
+      markdown = render({
+        title,
+        date,
+        ...(kind === 'work-log' ? { author: author.slug, collaborators, contributions, hoursByMember } : {}),
+        timeCommitted: hours,
+        images: saved,
+        issue: number,
+        login: issue.user.login,
+        content,
+      });
+    } catch (err) {
+      const message = `The entry template could not be filled in, so nothing was posted: ${err.message}`;
+      core.setFailed(message);
+      return done('misconfigured', { message });
     }
-    fm.push(`timeCommitted: ${hours}`);
-    if (saved.length) {
-      fm.push('images:');
-      for (const s of saved) fm.push(`  - src: ${s.src}`, `    alt: ${yamlStr(s.alt)}`);
+    if (!markdown.split('\n').includes(postedLine(number, issue.user.login))) {
+      const message =
+        `.github/templates/${TEMPLATE_FILE[kind]} no longer writes the "# Posted from issue #… by @…" line. ` +
+        'Without it the bot cannot tell that an issue was already posted, so nothing was written. Put the line back.';
+      core.setFailed(message);
+      return done('misconfigured', { message });
     }
-    fm.push(`# Posted from issue #${number} by @${issue.user.login}`, 'draft: false', '---', '');
+    fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `${slug}.md`);
-    fs.writeFileSync(file, `${fm.join('\n')}\n${content}\n`);
+    fs.writeFileSync(file, markdown);
 
     const rel = path.relative(root, file).replace(/\\/g, '/');
     return done('written', { file: rel, url: entryUrl(context, rel) });
@@ -508,14 +671,53 @@ module.exports.report = async function report({
       if (log) tail = `\n\nLast lines of the push log:\n\n\`\`\`\n${log}\n\`\`\`\n`;
     }
     const table = ['| | |', '|---|---|', ...rows.map(([k, v]) => `| ${k} | ${cell(v)} |`)].join('\n');
-    await core.summary.addRaw(`### Post log entry: ${headline}\n\n${table}${tail}\n`, true).write();
+    await core.summary.addRaw(`### Post log entry: ${headline}\n\n${table}${tail}\n${headingsReport(entry)}`, true).write();
     if (failure) core.setFailed(`${headline}. ${failure}`);
     else core.notice(headline);
   }
   return { headline, failure, deploy };
 };
 
+/**
+ * Every "### " heading in the issue and what the parser read it as. A heading that
+ * matched no field is flagged: usually it is a member's own sub-heading (kept as
+ * text, nothing lost), but if it is a form field, the labels have drifted and that
+ * field's value went into the field above it. Fields never found are listed too.
+ */
+function headingsReport(entry) {
+  let list = [];
+  try {
+    list = JSON.parse(entry.headings || '[]');
+  } catch {
+    return '\n#### Form headings\n\nCould not read the list of headings from the build step.\n';
+  }
+  if (!list.length && !entry.missing) return '';
+  const code = s => `\`### ${String(s).replace(/`/g, "'").replace(/\|/g, '\\|')}\``;
+  const rows = list.map(h =>
+    h.field
+      ? `| ${code(h.heading)} | ${h.field} |`
+      : `| ${code(h.heading)} | ⚠️ **matched no form field** — kept as text inside ${h.inside ? `"${h.inside}"` : 'nothing (it comes before the first field)'} |`,
+  );
+  const unmatched = list.filter(h => !h.field).length;
+  const lines = [
+    '',
+    `#### Form headings (${entry.form || 'unknown'} form)`,
+    '',
+    unmatched
+      ? `${unmatched} heading(s) matched no field. A member's own sub-heading (e.g. "### Next steps") is expected and harmless. A form field listed here means the parser's labels and the form have drifted apart: its value was read as part of the field above it.`
+      : 'Every heading matched a form field.',
+    '',
+    '| Heading in the issue | Read as |',
+    '|---|---|',
+    ...rows,
+  ];
+  if (entry.missing) lines.push('', `⚠️ **Form fields not found in the issue:** ${entry.missing}`);
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports.parseForm = parseForm;
 module.exports.detectKind = detectKind;
 module.exports.extractImages = extractImages;
-module.exports.FIELD_ORDER = FIELD_ORDER;
+module.exports.parseHours = parseHours;
+module.exports.workLogLayout = workLogLayout;
+module.exports.readHeading = readHeading;

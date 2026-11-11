@@ -5,6 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Rules
 - Never run git commit, push, or create branches. I handle all git myself.
   (Read-only git — `status`, `diff`, `log` — is fine. No `add`, `commit`, `push`, `branch`, `checkout -b`, `merge`, `rebase`.)
+- The same goes for the GitHub CLI: read-only `gh` only. I handle anything that changes the repo, its issues,
+  PRs, workflows or settings.
+  - Fine: `gh run view`, `gh run list`, `gh issue view`, `gh issue list`, `gh pr view`, `gh pr list`, `gh pr diff`,
+    `gh pr checks`, and `gh api` GET requests.
+  - Not allowed: `gh pr create|merge|close|comment|edit|review`, `gh issue create|close|reopen|comment|edit|delete`,
+    `gh workflow run|enable|disable`, `gh run rerun|cancel`, `gh release …`, `gh label …`, `gh repo edit`,
+    `gh secret …`, `gh variable …`, and `gh api` with `-X`/`--method` `POST`, `PATCH`, `PUT` or `DELETE`.
+  - Careful with `gh api`: adding `-f`, `-F`, `--field`, `--raw-field` or `--input` silently switches the
+    method to POST. A read must have none of those (pass query parameters in the URL), or state `-X GET`.
 - Run the site locally with: `npm run dev`
 - Styles live in `src/styles/` (`tokens.css`, `base.css`, `components.css`). No inline `style=` attributes.
 - Nothing that belongs in `src/config/site.ts` (member names, team number, project name, emails, URLs) may be hardcoded anywhere else.
@@ -33,7 +42,8 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 ## Architecture
 
 - `src/config/site.ts` — single source of truth: team, project text, URLs, `SECTION_ORDER`, `FEATURES` kill switches, `NAV`, `DOCUMENTS`, timeline term boundaries. Unknowns are `TODO(Ethan)`; `isSet()` treats `'TODO…'` as unset.
-- `src/content.config.ts` — Zod schemas for the `work-log` and `updates` collections. Astro 7 requires this location; the legacy `src/content/config.ts` is a hard error. The glob loader's `generateId` enforces that a work-log file's folder is a member slug and matches `author`.
+- `src/content.config.ts` — the `work-log` and `updates` collections. Astro 7 requires this location; the legacy `src/content/config.ts` is a hard error. The glob loader's `generateId` enforces that a work-log file's folder is a member slug and matches `author`.
+- `src/content.schemas.ts` — the Zod frontmatter schemas themselves, as factories (`workLogSchema(members)`, `updateSchema()`). Kept apart so `npm run test:post` validates bot-written files against the real schema; it must stay plain, type-strippable TypeScript importing only `node:*` and `astro/zod`.
 - `src/content/work-log/<member-slug>/YYYY-MM-DD-title.md` and `src/content/updates/YYYY-MM-DD-title.md` — the entries.
 - `src/lib/entries.ts` — always load entries through here (`getWorkLog`, `getUpdates`, …). It applies draft filtering (`draft: true` only shows, with a SAMPLE badge, while `FEATURES.showSampleContent` is on), sorting, the short-body build warning, stats and cadence buckets.
 - **An entry belongs to its author and every collaborator.** It is written once, shows on each participant's tab, and has one page at `/work-log/<author>/<entry>/`. Never test `e.data.author === slug` to ask whose entry it is, and never sum `timeCommitted` directly: use `participants()`, `isParticipant()`, `hoursFor()`, `personHours()`, `memberStats()` and `hoursDisplay()` from `src/lib/entries.ts`. `timeCommitted` is hours per participant; `hoursByMember` overrides it; team totals are person-hours and are labelled so.
@@ -51,6 +61,8 @@ Astro 7 + TypeScript + plain CSS custom properties. Node ≥ 22.18 (CI uses 24).
 
 ### Posting
 - Members post through GitHub Issue Forms (`.github/ISSUE_TEMPLATE/`). `.github/workflows/post-entry.yml` runs `.github/scripts/post-entry.cjs`, which checks the issue author against `.github/allowlist.json`, writes the Markdown file and images, then commits as `github-actions[bot]`. It then dispatches `deploy.yml`, because pushes made with `GITHUB_TOKEN` don't trigger workflows.
+- The work-log form has one contribution box and one hours box per member (no collaborator checkboxes). A filled box makes that person a participant; their hours go to `hoursByMember`; `timeCommitted` is the author's hours. Form labels come from `.github/scripts/form-fields.cjs`, used both by `sync:allowlist` (to write the form) and by the parser (to find headings, normalised for case/spacing/dashes/punctuation). Unmatched and missing headings are listed in the run summary — never drop that report. Issues in the old checkbox layout are still read with the old rules.
+- The Markdown file is rendered from `.github/templates/*.md` by `.github/scripts/entry-template.cjs`: typed placeholders (`PLACEHOLDERS`), never raw interpolation. No dependencies in `.github/scripts/` — the Action does not install `node_modules`.
 - The job is deliberately not gated on labels (a skipped job is invisible). The script works out the entry kind itself, and every run ends by writing what happened to the run summary. An issue can be replayed from Actions → Post log entry → Run workflow.
 - Never name a `github-script` step output `result`: the action overwrites it with the script block's return value. The posting script reports through `entry_result`. `npm run test:post` runs the workflow's real `script:` blocks the way the action does, so it catches this.
 - The "Post an update" link is deliberately quiet and unprotected. The allowlist in the Action is the real access control; don't add client-side hiding.
