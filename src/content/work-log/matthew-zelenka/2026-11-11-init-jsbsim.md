@@ -35,6 +35,7 @@ contributions:
     <iframe
       src="/graphs/2026-11-11-init-jsbsim/glider_3d_trajectory.html"
       width="100%"
+      height="600"
       style="background: transparent; border: none;"
       frameborder="0"
     ></iframe> 
@@ -42,6 +43,7 @@ contributions:
     <iframe
       src="/graphs/2026-11-11-init-jsbsim/glider_flight_dashboard.html"
       width="100%"
+      height="600"
       style="background: transparent; border: none;"
       frameborder="0"
     ></iframe> 
