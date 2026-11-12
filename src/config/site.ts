@@ -20,14 +20,14 @@ export const COURSE = {
 } as const;
 
 export const PROJECT = {
-  name: 'Group 27 Capstone',
+  name: 'SupraNimbōs',
   subtitle: 'Balloon Lifted High-Altitude Gliding Rocket Launch System',
-  // TODO(Ethan): short name / acronym used in the nav, favicon and <title>. Suggestion: 'BLHAG'.
-  shortName: 'TODO',
-  // TODO(Ethan): one sentence, plain language, for the hero and the OG description.
-  tagline: 'TODO — one-sentence description of what the system does.',
+  //short name/acronym used in the nav, favicon and <title>. Suggestion: 'BLHAG'.
+  shortName: 'SupraNimbōs',
+  //one sentence, plain language, for the hero and the OG description.
+  tagline: 'Balloon altitude, aircraft precision, a fraction of the cost.',
   // TODO(Ethan): 2–3 sentence overview for the About section.
-  summary: 'TODO',
+  summary: 'The SN (SupraNimbōs) series replaces the costly first stage of a rocket launch with a balloon. A reusable glider is lifted to altitude, releases its payload, and flies itself home to a chosen landing site. The SN MK-I is our scaled demonstrator of that release and guided return.',
   // TODO(Ethan): 3–5 key objectives for the About section, one string each. Empty = no list.
   objectives: [] as readonly string[],
 } as const;
