@@ -106,11 +106,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-nav);
+  font-weight: 400;              /* Russo One has no bold */
   font-size: 1.05rem;
-  letter-spacing: 0.01em;        /* was var(--tracking-eyebrow) */
-  text-transform: none;          /* was uppercase */
+  letter-spacing: 0.02em;        /* mixed case; the 0.18em eyebrow tracking is for caps */
+  text-transform: none;
   text-decoration: none;
 }
 .nav__mark {
@@ -209,11 +209,18 @@ html:not(.js) .nav__inner > .nav__toggle { display: none; }
   z-index: -1;
   background: var(--grad-scrim);
 }
+/* A size container so the title can be capped at the column's width (cqi below). It only
+   affects the h1; padding and gutters are unchanged, so the other hero children don't move. */
+.hero__content { container: hero / inline-size; }
 .hero__content > * + * { margin-top: var(--s-3); }
 .hero__content h1 {
   max-width: 16ch;
+  font-family: var(--font-hero);
+  /* "SupraNimbōs" in Michroma is ~8.6em wide; 11cqi keeps it at ≤95% of the column. */
+  font-size: min(var(--step-hero), 11cqi);
+  font-weight: 400;             /* Michroma has no bold; faux bold smears it */
   text-transform: none;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;       /* Michroma is wide and loosely spaced already */
 }
 .hero__subtitle {
   max-width: 36ch;

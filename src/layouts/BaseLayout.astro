@@ -5,6 +5,10 @@ import '@fontsource/saira/latin-700.css';
 import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-600.css';
 import '@fontsource-variable/jetbrains-mono/wght.css';
+// All-subset files (not latin-400): the unicode-range split lets the latin-ext face cover
+// the ō in the project name; the browser downloads only the subsets a page uses.
+import '@fontsource/russo-one/400.css';
+import '@fontsource/michroma/400.css';
 import '../styles/tokens.css';
 import '../styles/base.css';
 import '../styles/components.css';

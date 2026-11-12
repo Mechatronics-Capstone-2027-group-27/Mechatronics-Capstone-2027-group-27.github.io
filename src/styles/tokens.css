@@ -27,6 +27,9 @@
   --font-display: 'Saira', 'Archivo', system-ui, sans-serif;  /* uppercase, wide tracking */
   --font-body:    'Inter', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;  /* dates, hours, all metadata */
+  /* Single-use faces, 400 weight only — never set a bolder weight on them (faux bold). */
+  --font-nav:     'Russo One', var(--font-display);   /* .nav__brand */
+  --font-hero:    'Michroma', var(--font-display);    /* .hero__content h1 */
 
   --step--1: clamp(0.83rem, 0.79rem + 0.18vw, 0.94rem);
   --step-0:  clamp(1.00rem, 0.95rem + 0.25vw, 1.13rem);
@@ -34,6 +37,9 @@
   --step-2:  clamp(1.56rem, 1.36rem + 1.00vw, 2.44rem);
   --step-3:  clamp(1.95rem, 1.58rem + 1.85vw, 3.66rem);
   --step-4:  clamp(2.44rem, 1.78rem + 3.30vw, 5.61rem);
+  /* Hero title only: Michroma runs ~40% wider than Saira and the title is one unbreakable
+     word. On narrow screens .hero__content h1 caps it at the hero container's width. */
+  --step-hero: clamp(2.275rem, 1.56rem + 4.42vw, 7.29rem);
 
   --tracking-display: 0.08em;
   --tracking-eyebrow: 0.18em;
