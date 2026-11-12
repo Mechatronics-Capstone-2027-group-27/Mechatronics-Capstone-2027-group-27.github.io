@@ -3,9 +3,9 @@ title: "initial usage and testing of jsbsim"
 date: 2026-11-11
 author: matthew-zelenka
 collaborators: []
-timeCommitted: 2
+timeCommitted: 3
 hoursByMember:
-  matthew-zelenka: 2
+  matthew-zelenka: 3
 contributions:                                       
   matthew-zelenka: |+
     ## Initial Research and Setup
