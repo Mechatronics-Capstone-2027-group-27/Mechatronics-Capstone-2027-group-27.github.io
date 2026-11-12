@@ -262,6 +262,14 @@ html:not(.js) .nav__inner > .nav__toggle { display: none; }
 /* ── Sections ──────────────────────────────────────────────────────── */
 .section { padding-block: var(--section-y); border-top: 1px solid var(--line); }
 .section__head { margin-bottom: var(--s-6); }
+/* Front-page section titles in Russo One. Single weight: 400, or it is faux-bolded. Its caps
+   are wide and heavy, so tracking comes down from --tracking-display and leading opens up. */
+.section__head h2 {
+  font-family: var(--font-nav);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
 .section__head > * + * { margin-top: var(--s-3); }
 .section__deck { color: var(--text-dim); font-size: var(--step-1); line-height: 1.4; }
 .section__more { margin-top: var(--s-5); }
