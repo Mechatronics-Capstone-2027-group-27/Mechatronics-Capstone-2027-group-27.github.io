@@ -10,15 +10,35 @@ contributions:
   nitya-singh: |+
     ### Results
     
-    JSBSim was selected due to its greater flexibility in aerodynamic modelling and control-system development. It can use precomputed aerodynamic coefficients, reducing the need to repeatedly run XFOIL during flight simulations. However, reliable coefficient data is still required.
+    Based on the investigation, JSBSim was selected as the preferred simulation platform for the glider project.
     
-    Next Steps
+    Although MSFS 2020 provides better visualization, JSBSim offers greater flexibility for aerodynamic modelling, control-system development, and quantitative analysis.
+    
+    The main findings from the comparison are summarized below:
+    
+    | Criteria | MSFS 2020 | JSBSim |
+    |---|---|---|
+    | Custom aerodynamic coefficients | Limited flexibility | Highly configurable |
+    | Control-surface modelling | Supported | Supported |
+    | MATLAB/Python integration | Through SimConnect | Direct integration available |
+    | Atmospheric conditions | Customizable | Customizable |
+    | Flight data extraction | SimConnect API | Native data logging |
+    | Automated simulations | More complex | Well supported |
+    | Flight visualization | Excellent | Requires additional software |
+    
+    JSBSim was considered more suitable because the team can define the glider's aerodynamic characteristics using coefficient tables and simulate its response to different control inputs. Its ability to integrate with external control algorithms will also be beneficial when developing the glider's guidance and control system.
+    
+    While JSBSim does not directly resolve XFOIL's convergence issues, it separates aerodynamic coefficient generation from flight simulation, allowing the flight dynamics to be evaluated efficiently once reliable aerodynamic data is available.
+    
+    
+    ### Next Steps
     
     - Install and configure JSBSim and investigate its aircraft modelling structure.
     - Create a preliminary glider model using the current geometry, mass, and aerodynamic parameters.
     - Investigate importing aerodynamic coefficient lookup tables from XFOIL or alternative sources.
     - Configure elevator, rudder, and aileron inputs for control-system testing.
     - Integrate JSBSim with MATLAB or Python to collect flight data and evaluate control algorithms.
+
 # Posted from issue #28 by @sky1515
 draft: false
 ---
@@ -29,6 +49,11 @@ Two potential platforms were investigated: Microsoft Flight Simulator 2020 (MSFS
 
 ### Process
 
-- **Microsoft Flight Simulator 2020**: Supports customizable aircraft properties, environmental conditions, and flight data extraction through SimConnect. However, it offers limited flexibility for custom aerodynamic models and high-altitude simulations.
-
-- JSBSim: An open-source flight dynamics engine supporting custom aerodynamic coefficient lookup tables, control-surface modelling, atmospheric conditions, and MATLAB/Python integration. It also allows automated simulations and flight data extraction.
+1. Microsoft Flight Simulator 2020
+  - MSFS 2020 was investigated for its realistic flight physics, customizable aircraft properties, and environmental conditions.
+  - Its SimConnect API allows flight data such as altitude, airspeed, orientation, and control-surface positions to be extracted. It also supports external control inputs through MATLAB or Python integration.
+  - However, MSFS has limited flexibility for custom aerodynamic models and is less suitable for simulating the extreme atmospheric conditions during high-altitude descent.
+2. JSBSim
+  - JSBSim is an open-source flight dynamics simulator that offers greater flexibility in modelling aircraft aerodynamics, control surfaces, and atmospheric conditions.
+  - It supports aerodynamic coefficient lookup tables, allowing precomputed XFOIL data to be used without repeatedly running XFOIL during simulations. However, the coefficient data must still be validated.
+  - JSBSim can integrate with MATLAB or Python for control-system development and supports automated simulations and data extraction, making it more suitable for evaluating the glider's flight performance.
