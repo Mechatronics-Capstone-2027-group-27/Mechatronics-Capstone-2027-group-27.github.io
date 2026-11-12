@@ -40,7 +40,7 @@ const cards: { icon: IconName; title: string; text: string; cta: string; live: b
   {person && (
     <div class="contact reveal">
       <p class="contact__line">
-        Questions about the project, or want to work with us?{' '}
+        Questions about the project, or want to work with us?<br />
         <strong>{person.name}</strong>{isSet(person.role) && <>, {person.role},</>} is your point of contact.
       </p>
       <ContactLink email={SITE.contact.general} showAddress>Email {person.name}</ContactLink>
