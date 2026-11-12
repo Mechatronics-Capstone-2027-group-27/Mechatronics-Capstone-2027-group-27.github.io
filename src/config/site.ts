@@ -21,7 +21,7 @@ export const COURSE = {
 
 export const PROJECT = {
   name: 'SupraNimbōs',
-  subtitle: 'Balloon Lifted High-Altitude Gliding Rocket Launch System',
+  subtitle: 'Balloon Lifted High-Altitude Gliding Rocket Launch Systems',
   //short name/acronym used in the nav, favicon and <title>. Suggestion: 'BLHAG'.
   shortName: 'SupraNimbōs',
   //one sentence, plain language, for the hero and the OG description.
