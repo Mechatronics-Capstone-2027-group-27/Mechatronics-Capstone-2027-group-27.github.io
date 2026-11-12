@@ -5,9 +5,6 @@ author: david-makarczyk
 collaborators: []
 contributions:
   david-makarczyk: |-
-    # Overview
-    The point-particle kinematics model does not accurately reflect the kinematics of the glider. Most importantly, it cannot identify a stall, it cannot differentiate between different angles of attack; and so consequently it is not capable of varying lift and drag coefficients as a function of flight conditions. 
-
     # Implementation
     - The glider was modelled as a simple wing and horizontal stabilizer system, with the center of gravity located forward of the wing and stabilizer. 
     - Relative dimensions and aspect ratios were taken from a photo of the StratoDynamics HiDRON glider.
@@ -30,4 +27,4 @@ hoursByMember:
 draft: false
 ---
 
-NaN
+    The point-particle kinematics model does not accurately reflect the kinematics of the glider. Most importantly, it cannot identify a stall, it cannot differentiate between different angles of attack; and so consequently it is not capable of varying lift and drag coefficients as a function of flight conditions. 
