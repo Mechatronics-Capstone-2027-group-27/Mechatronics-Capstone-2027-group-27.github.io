@@ -109,8 +109,8 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.05rem;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
+  letter-spacing: 0.01em;        /* was var(--tracking-eyebrow) */
+  text-transform: none;          /* was uppercase */
   text-decoration: none;
 }
 .nav__mark {
@@ -210,7 +210,11 @@ html:not(.js) .nav__inner > .nav__toggle { display: none; }
   background: var(--grad-scrim);
 }
 .hero__content > * + * { margin-top: var(--s-3); }
-.hero__content h1 { max-width: 16ch; }
+.hero__content h1 {
+  max-width: 16ch;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
 .hero__subtitle {
   max-width: 36ch;
   font-family: var(--font-display);
