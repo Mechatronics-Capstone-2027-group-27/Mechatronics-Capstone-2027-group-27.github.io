@@ -7,7 +7,8 @@ timeCommitted: 1
 hoursByMember:
   nitya-singh: 1
 contributions:                                       
-  nitya-singh: "### Results
+  nitya-singh: "
+### Results
 
 JSBSim was selected due to its greater flexibility in aerodynamic modelling and control-system development. It can use precomputed aerodynamic coefficients, reducing the need to repeatedly run XFOIL during flight simulations. However, reliable coefficient data is still required.
 
